@@ -1,0 +1,25 @@
+# Safety net for the repo root. The Django project has its own, fuller
+# .gitignore in nekkoguard/.gitignore.
+
+# Secrets / environment files
+.env
+.env.*
+.envs/
+*.pem
+*.key
+*.crt
+*.p12
+
+# Python caches & virtualenvs
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
