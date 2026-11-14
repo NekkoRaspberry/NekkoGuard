@@ -1,48 +1,42 @@
+# Local stack on NekkoRaspberry.
+# Uses the shared services already running in k3s:
+#   - PostgreSQL: postgres.databases.svc.cluster.local:5432  (Postgres-K3s)
+#   - Mailpit:    mailpit.email.svc.cluster.local:1025       (Mailpit-K3s)
+#                 web UI: https://mailpit.home.arpa
+# Redis still runs as a container here (there is no Redis in k3s yet).
+#
+# Credentials live in the git-ignored .envs/.local/ folder.
+# For a fully self-contained stack (CI, other machines) use docker-compose.development.yml.
+
 volumes:
-  nekkoguard_local_postgres_data: {}
-  nekkoguard_local_postgres_data_backups: {}
   nekkoguard_local_redis_data: {}
+
+# Containers resolve k3s service names through the cluster DNS (CoreDNS).
+# Container names (redis, django, ...) still resolve through Docker's own DNS.
+x-k3s-dns: &k3s-dns
+  dns:
+    - 10.43.0.10
 
 services:
   django: &django
     build:
       context: .
-      dockerfile: ./compose/local/django/Dockerfile
+      dockerfile: ./compose/development/django/Dockerfile
     image: nekkoguard_local_django
     container_name: nekkoguard_local_django
+    <<: *k3s-dns
     depends_on:
-      - postgres
       - redis
-      - mailpit
     volumes:
       - .:/app:z
     env_file:
       - path: ./.envs/.local/.django
-        required: false
+        required: true
       - path: ./.envs/.local/.postgres
-        required: false
+        required: true
     ports:
       - '8000:8000'
     command: /start
-
-  postgres:
-    build:
-      context: .
-      dockerfile: ./compose/production/postgres/Dockerfile
-    image: nekkoguard_production_postgres
-    container_name: nekkoguard_local_postgres
-    volumes:
-      - nekkoguard_local_postgres_data:/var/lib/postgresql/18/docker
-      - nekkoguard_local_postgres_data_backups:/backups
-    env_file:
-      - path: ./.envs/.local/.postgres
-        required: false
-
-  mailpit:
-    image: docker.io/axllent/mailpit:latest
-    container_name: nekkoguard_local_mailpit
-    ports:
-      - "8025:8025"
 
   redis:
     image: docker.io/redis:7.2
@@ -56,8 +50,6 @@ services:
     container_name: nekkoguard_local_celeryworker
     depends_on:
       - redis
-      - postgres
-      - mailpit
     ports: []
     command: /start-celeryworker
 
@@ -67,8 +59,6 @@ services:
     container_name: nekkoguard_local_celerybeat
     depends_on:
       - redis
-      - postgres
-      - mailpit
     ports: []
     command: /start-celerybeat
 

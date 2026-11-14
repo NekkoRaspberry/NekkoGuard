@@ -10,10 +10,15 @@ DEBUG = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#secret-key
 SECRET_KEY = env(
     "DJANGO_SECRET_KEY",
-    default="!!!SET DJANGO_SECRET_KEY in .envs/.local/.django!!!",
+    default="!!!SET DJANGO_SECRET_KEY in your .envs/ django env file!!!",
 )
 # https://docs.djangoproject.com/en/dev/ref/settings/#allowed-hosts
-ALLOWED_HOSTS = ["localhost", "0.0.0.0", "127.0.0.1"]  # noqa: S104
+# Set per environment in .envs/<env>/.django (comma-separated), e.g.
+# DJANGO_ALLOWED_HOSTS=nekkoguard.home.arpa,localhost,127.0.0.1
+ALLOWED_HOSTS = env.list(
+    "DJANGO_ALLOWED_HOSTS",
+    default=["localhost", "0.0.0.0", "127.0.0.1"],  # noqa: S104
+)
 
 # CACHES
 # ------------------------------------------------------------------------------
@@ -30,7 +35,12 @@ CACHES = {
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-host
 EMAIL_HOST = env("EMAIL_HOST", default="mailpit")
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-port
-EMAIL_PORT = 1025
+EMAIL_PORT = env.int("EMAIL_PORT", default=1025)
+# Login for the shared k3s Mailpit (docker-compose.local.yml).
+# Empty = no login (the Mailpit container in docker-compose.development.yml).
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="webmaster@localhost")
 
 # WhiteNoise
 # ------------------------------------------------------------------------------

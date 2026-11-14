@@ -56,7 +56,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 # copy python dependency wheels from python-build-stage
 COPY --from=python-build-stage --chown=app:app /app /app
 
-COPY ./compose/local/docs/start /start-docs
+COPY ./compose/development/docs/start /start-docs
 RUN sed -i 's/\r$//g' /start-docs
 RUN chmod +x /start-docs
 

@@ -16,10 +16,10 @@ updates:
 
   # Enable version updates for Docker
   - package-ecosystem: 'docker'
-    # Look for a `Dockerfile` in the `compose/local/django` directory
+    # Look for a `Dockerfile` in the `compose/development/django` directory
     directories:
-      - 'compose/local/django/'
-      - 'compose/local/docs/'
+      - 'compose/development/django/'
+      - 'compose/development/docs/'
       - 'compose/production/django/'
     # Every weekday
     schedule:
@@ -39,7 +39,7 @@ updates:
   - package-ecosystem: 'docker'
     # Look for a `Dockerfile` in the listed directories
     directories:
-      - 'compose/local/node/'
+      - 'compose/development/node/'
       - 'compose/production/aws/'
       - 'compose/production/postgres/'
       - 'compose/production/traefik/'
