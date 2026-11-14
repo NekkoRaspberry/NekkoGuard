@@ -1,0 +1,354 @@
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-width);
+  height: 100vh;
+  height: 100dvh;
+  background: var(--bg-sidebar);
+  box-shadow: var(--shadow-nav);
+  transition: width var(--duration-base) var(--ease-out);
+  z-index: 40;
+  overflow: hidden;
+}
+
+.collapsed {
+  width: var(--sidebar-width-collapsed);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--topbar-height);
+  padding: 0 var(--space-4);
+  flex-shrink: 0;
+}
+
+.closeMobile {
+  display: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.closeMobile:hover {
+  background: var(--surface-3);
+}
+
+.nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.groupLabel {
+  padding: 0 var(--space-3);
+  margin-bottom: var(--space-1);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.item:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.itemIcon {
+  flex-shrink: 0;
+}
+
+.active,
+.active:hover {
+  background: var(--primary-subtle);
+  color: var(--text-primary);
+}
+
+.active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--primary);
+}
+
+.active .itemIcon {
+  color: var(--primary-hover);
+}
+
+.itemLabel {
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+/* Collapsed rail (desktop only — the mobile drawer always shows labels).
+   Labels are removed from the layout, not just hidden: an invisible label still takes
+   width and pushes the icon out of the 64px rail. */
+@media (min-width: 1024px) {
+  .collapsed .itemLabel,
+  .collapsed .connLabel,
+  .collapsed .connDetail {
+    display: none;
+  }
+
+  .collapsed .groupLabel {
+    height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  .collapsed .group + .group {
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .collapsed .nav {
+    padding: var(--space-3) var(--space-2) var(--space-4);
+  }
+
+  .collapsed .item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .collapsed .active::before {
+    left: -8px;
+  }
+
+  .collapsed .brand {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .collapsed .footer {
+    padding: var(--space-3) var(--space-2);
+  }
+
+  .collapsed .version {
+    text-align: center;
+    padding: var(--space-2) 0 0;
+  }
+}
+
+.brandLink {
+  display: inline-flex;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+
+.brandLink:hover {
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.version {
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-3) 0;
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.collapseToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+
+.collapseToggle:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+
+.collapsed .collapseToggle {
+  justify-content: center;
+  padding: 0;
+}
+
+/* Connection indicator */
+.connection {
+  --conn: var(--neutral);
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+  text-align: left;
+}
+
+.connection:hover {
+  background: var(--surface-3);
+}
+
+.collapsed .connection {
+  justify-content: center;
+  padding: 0;
+}
+
+.conn-connected {
+  --conn: var(--success);
+}
+
+.conn-connecting {
+  --conn: var(--warning);
+}
+
+.conn-disconnected {
+  --conn: var(--danger);
+}
+
+.connDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--conn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--conn) 20%, transparent);
+  flex-shrink: 0;
+}
+
+.conn-connecting .connDot {
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+.connLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.connDetail {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.backdrop {
+  display: none;
+}
+
+/* Laptop: collapse to the icon rail by default is handled by the user; tablet/mobile → drawer */
+@media (max-width: 1023px) {
+  .sidebar,
+  .collapsed {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform var(--duration-base) var(--ease-out);
+    box-shadow: var(--shadow-3);
+  }
+
+  .mobileOpen {
+    transform: translateX(0);
+  }
+
+  .collapsed .item,
+  .collapsed .connection {
+    justify-content: flex-start;
+    padding: 0 var(--space-3);
+  }
+
+  .closeMobile {
+    display: grid;
+  }
+
+  .collapseToggle {
+    display: none;
+  }
+
+  .backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: var(--overlay);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--duration-base) var(--ease-out);
+    z-index: 39;
+  }
+
+  .backdropVisible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

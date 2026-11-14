@@ -1,0 +1,66 @@
+.banner {
+  --tone: var(--info);
+  --tone-bg: var(--info-subtle);
+
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--tone) 30%, transparent);
+  background: var(--tone-bg);
+  animation: enter var(--duration-base) var(--ease-out);
+}
+
+.icon {
+  display: flex;
+  color: var(--tone);
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.text {
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+  color: var(--text-secondary);
+}
+
+.action {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.success {
+  --tone: var(--success);
+  --tone-bg: var(--success-subtle);
+}
+
+.warning {
+  --tone: var(--warning);
+  --tone-bg: var(--warning-subtle);
+}
+
+.danger {
+  --tone: var(--danger);
+  --tone-bg: var(--danger-subtle);
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}

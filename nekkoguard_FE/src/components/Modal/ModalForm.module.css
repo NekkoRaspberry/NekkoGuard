@@ -1,0 +1,21 @@
+/* Form laid out inside a Modal body: fields stack, actions row at the bottom. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.actionsEnd {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
