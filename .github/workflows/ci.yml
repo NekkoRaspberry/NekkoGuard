@@ -1,15 +1,19 @@
 name: CI
 
 on:
-  # PRs into dev (Dependabot and feature work) and into main are tested;
-  # pushes to main are tested again after merging.
+  # Every PR into dev or main runs ALL jobs: they are required status checks in the
+  # main ruleset, and a required check that is skipped would block the merge.
   pull_request:
     branches: ['main', 'dev']
-    paths-ignore: ['nekkoguard_BE/docs/**', 'nekkoguard_FE/**', 'nekkoguard_specifications/**']
 
+  # Pushes to main (after a merge) are tested again.
   push:
     branches: ['main']
-    paths-ignore: ['nekkoguard_BE/docs/**', 'nekkoguard_FE/**', 'nekkoguard_specifications/**']
+    paths-ignore: ['nekkoguard_BE/docs/**', 'nekkoguard_specifications/**']
+
+# Least privilege: jobs only read the repository.
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
@@ -105,3 +109,31 @@ jobs:
 
       - name: Tear down the Stack
         run: docker compose -f docker-compose.development.yml down
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nekkoguard_FE
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: nekkoguard_FE/package-lock.json
+
+      - name: Install dependencies (lockfile only)
+        run: npm ci --no-audit --no-fund
+
+      - name: Type-check
+        run: npx tsc -b
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Production build
+        run: npx vite build
