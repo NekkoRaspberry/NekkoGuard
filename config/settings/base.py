@@ -364,6 +364,46 @@ ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 # https://docs.allauth.org/en/latest/account/configuration.html
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+# New accounts (email signup, provider signup, adding an email) are only accepted
+# from these well-known email providers. Existing accounts are not affected.
+# Override with a comma-separated DJANGO_ACCOUNT_ALLOWED_EMAIL_DOMAINS; set it to an
+# empty value to accept any domain.
+ACCOUNT_ALLOWED_EMAIL_DOMAINS = env.list(
+    "DJANGO_ACCOUNT_ALLOWED_EMAIL_DOMAINS",
+    default=[
+        # Google
+        "gmail.com",
+        "googlemail.com",
+        # Microsoft
+        "outlook.com",
+        "outlook.pt",
+        "hotmail.com",
+        "hotmail.co.uk",
+        "hotmail.pt",
+        "live.com",
+        "live.com.pt",
+        "msn.com",
+        # Apple
+        "icloud.com",
+        "me.com",
+        "mac.com",
+        # Yahoo / AOL
+        "yahoo.com",
+        "yahoo.co.uk",
+        "ymail.com",
+        "aol.com",
+        # Privacy-focused and others
+        "proton.me",
+        "protonmail.com",
+        "pm.me",
+        "tutanota.com",
+        "zoho.com",
+        "gmx.com",
+        "gmx.net",
+        "mail.com",
+        "sapo.pt",
+    ],
+)
 # https://docs.allauth.org/en/latest/account/configuration.html
 ACCOUNT_ADAPTER = "nekkoguard.users.adapters.AccountAdapter"
 # https://docs.allauth.org/en/latest/account/forms.html
