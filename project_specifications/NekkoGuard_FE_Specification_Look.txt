@@ -1,0 +1,1116 @@
+# NEKKOGUARD — FRONTEND ANALYSIS, DESIGN SPECIFICATION & IMPLEMENTATION PLAN
+
+Document type: Frontend Look & Feel + Frontend Application Specification
+Source of truth for scope: Specifications/NekkoGuardLogic.txt (v1.1)
+Visual inputs: Specifications/Assets.jfif, Vulnerabilities.jfif, Logs.jfif, Colors.jfif, navbar.jfif
+Date: 2026-11-14
+Status: Specification complete. Implementation NOT started (see Deliverable 10).
+
+Conventions used in this document
+- [SPEC]  = confirmed requirement, traceable to NekkoGuardLogic.txt (section number given, e.g. [SPEC 6.3]).
+- [DESIGN] = design / engineering recommendation made in this document. Not a product requirement.
+- [OPEN]  = open question, see Deliverable 9.
+- No real IP addresses appear in this document. Example values use placeholders such as <DEVICE_IP>, <SUBNET>.
+
+=====================================================================================================
+DELIVERABLE 1 — EXISTING PROJECT ANALYSIS
+=====================================================================================================
+
+1.1 Repository layout (as found)
+
+  NekkoGuard/
+  ├── README.md, .gitignore
+  ├── Specifications/                 (untracked) product spec + 5 reference images + this file
+  └── nekkoguard/                     Django project generated with cookiecutter-django
+      ├── config/                     settings (base/local/production/test), urls, api_router, asgi, celery_app, websocket
+      ├── nekkoguard/
+      │   ├── users/                  the ONLY domain app: custom User model, DRF UserViewSet, allauth adapters
+      │   ├── templates/              Bootstrap 5.2 server-rendered templates (base, home, about, allauth, users)
+      │   └── static/                 project.css (13 lines), project.js (empty), favicon
+      ├── compose/                    Dockerfiles for django, celery worker/beat/flower, postgres, traefik, nginx, docs
+      ├── docker-compose.{local,development,production,docs}.yml
+      └── pyproject.toml / uv.lock    Python dependencies (managed with uv)
+
+1.2 Backend technologies (confirmed in code)
+  - Django 6.0, Python (uv), PostgreSQL, Redis, Celery 5.7 + celery-beat + Flower.
+  - Django REST Framework, authentication = Session + Token, default permission = IsAuthenticated.
+  - drf-spectacular: OpenAPI schema at /api/schema/, Swagger UI at /api/docs/.
+  - django-allauth with the MFA extension (allauth.mfa) → TOTP + recovery codes are available server-side.
+  - django-cors-headers installed.
+  - ASGI entrypoint + websocket.py stub (ready for live updates later; no real channels yet).
+  - Traefik + nginx in production compose.
+
+1.3 Frontend technologies (confirmed in code)
+  - Only Django templates + Bootstrap 5.2 from CDN. No React, no TypeScript, no package.json, no bundler.
+  - Node.js is NOT installed on the Raspberry Pi host (checked: `node` not found).
+
+1.4 Existing API surface
+  - /api/users/ (UserViewSet: list/retrieve/me), /api/auth-token/, /api/schema/, /api/docs/.
+  - Nothing else. No models or endpoints exist for organizations, clients, sites, networks, devices,
+    ports, software, vulnerabilities, certificates, domains, Pi-hole, containers, logs, agents, alerts,
+    analytics or settings.
+
+1.5 Hard requirements that affect the frontend
+  - [SPEC 20.8] React + TypeScript is mandatory. Plain JavaScript must not be used for app code.
+  - [SPEC 2] Multi-tenant: Platform → Organization → Client → Site → Network → Devices; org selector required.
+  - [SPEC 2.3] Six roles; permissions always validated by backend (frontend only hides/disables).
+  - [SPEC 3] Email+password login, MFA (TOTP), recovery codes shown once, reset, sessions, logout, profile.
+  - [SPEC 4.2] 15 navigation sections (listed in Deliverable 4).
+  - [SPEC 4.4] Global search across hostnames, IPs, MACs, devices, services, ports, packages, CVEs, certs, containers, events.
+  - [SPEC 20.7] Desktop + tablet. Topology and dense tables may prioritise desktop.
+  - [SPEC 23] Unknown ≠ healthy, stale data visibly distinguished, freshness visible, empty states explain why,
+    disruptive actions confirmed.
+
+1.6 Host constraints (from CLAUDE.md, NekkoRaspberry rules)
+  - Raspberry Pi 4 / 8 GB, SD card: minimise writes, keep build/runtime light.
+  - Docker-first: the frontend build should run inside a container (node image, ARM64), not on the host.
+  - The built SPA is static files → served by nginx/Django; no Node process needed at runtime.
+
+1.7 Consequence
+  The frontend has to be built from zero, and almost every screen depends on backend models/APIs that do not
+  exist yet. Any implementation done now must use a clearly separated mock layer (see 8.6) and must never
+  present mock data as real integration.
+
+=====================================================================================================
+DELIVERABLE 2 — REFERENCE IMAGE ANALYSIS
+=====================================================================================================
+
+Five images were supplied. The prompt describes four; the fifth (navbar.jfif) is analysed as a
+navigation reference.
+
+-----------------------------------------------------------------------------------------------------
+2.A  Assets.jfif — ASSET / NETWORK DISCOVERY  (primary reference for Network Discovery & Topology)
+-----------------------------------------------------------------------------------------------------
+What it shows
+  A three-column operations screen on a near-black background:
+  1. Thin icon rail (far left, ~80px) → section switching.
+  2. Left list panel (~30%): back-arrow + "Network" title, a summary card for the current network
+     (name, online state, active device count, last update), a "Devices" section with a search input,
+     quick filter chips ("High Risk", "Last Scan"), and a vertical list of device cards
+     (category icon coloured by state, name + address, state + connection count, time-ago on the right).
+     The selected card has a bright 1px white outline.
+  3. Centre "Network Map" canvas (~45%): title + subtitle, fit-to-screen button top-right, minimap
+     top-right, a subtle dotted/grid background. Nodes are SQUARE-ish dark cards with a 1px border,
+     a coloured category icon on top, bold name, muted address, and a small issue counter.
+     Edges are thin grey lines; a highlighted path is green; the edge from the selected node to a
+     problem node is red. Small square "badges" sit on the midpoint of edges (lock icon, scan icon).
+     The selected node has a white border and a soft RED radial glow behind it.
+  4. Right "Device details" panel (~25%): close (X) button, device name + category icon + status pill,
+     a 2×2 key/value grid (IP/CIDR with "copy" tooltip, device type, last scan, score), a full-width
+     outlined primary action, then sections with icon headers: Relationships (list of related devices
+     with their link reason), Security & Health (rows with chevrons that drill down), Activity Timeline
+     (time-stamped events).
+
+What to adopt (and why)
+  - The 3-zone layout (list ↔ canvas ↔ details) keeps the graph as the main workspace while giving
+    structured access to the same inventory. This matches [SPEC 6.1, 6.7, 6.11] exactly.
+  - Card-style square nodes with icon+name+address: far more legible than circles with floating labels,
+    and labels never collide with edges. Satisfies [SPEC 6.3] "labels must remain readable".
+  - Colour used ONLY for meaning: green = healthy/online, red = problem; everything else is grey.
+    The calm grey canvas makes a single red glow instantly findable.
+  - Selection = outline + glow + highlighted incident edges; non-related nodes stay normal (no heavy dimming).
+  - Minimap + fit button → orientation in large networks.
+  - Detail panel organised in titled sections with drill-down rows ("3 Detected Issues ›") → progressive
+    disclosure instead of dumping all data.
+  - Copy-to-clipboard on technical values (IP/MAC).
+  - Monospace-friendly, compact typography for addresses.
+
+What NOT to adopt (not in the spec)
+  - "Risk Score" / "Threat Level" gauges — no risk scoring is defined in the spec. [OPEN Q7]
+  - "Analyse Path" action — the spec forbids claiming network paths that are not known [SPEC 6.10].
+  - Lock icons on edges (encryption state of a link) — no such data in the spec.
+  - "NOVA" AI assistant, purple toast, mascot — not in the spec.
+  - "Connections" count per device — only if observed relationships exist; otherwise omit.
+
+-----------------------------------------------------------------------------------------------------
+2.B  Vulnerabilities.jfif — VULNERABILITIES
+-----------------------------------------------------------------------------------------------------
+What it shows
+  Near-black app frame, minimal text sidebar (Dashboard, Assets, Vulnerabilities, Changes, Reports) with
+  a soft purple gradient pill for the active item. Page title left, period selector + purple primary
+  button right. Row of 3 KPI cards (icon + label, very large number, delta chip, small sparkline).
+  Main card "Common vulnerabilities found": a table with only three columns — a square SEVERITY SCORE
+  tile (red ≥9, orange 7–9), a two-line CVE cell (human title on line 1, CVE id in a small outlined
+  monospace chip on line 2), and a small status chip on the right. Hovered row has a slightly lighter
+  background. A second card shows a world map + region bars.
+
+What to adopt (and why)
+  - Very few columns in the main list; detail lives in a side panel. Readability over density.
+  - Severity as a square numeric tile with tinted background + coloured border: scannable, works for
+    colour-blind users because the number is always visible ([SPEC 20.5]).
+  - Two-line cell: readable title first, identifier as a quiet monospace chip.
+  - Small, muted status chips (not loud pills).
+  - KPI cards with one number + one context line.
+  - Generous row height (~52px) and consistent left alignment.
+
+What NOT to adopt
+  - World map / "Compromised assets by region" — no geolocation in the spec.
+  - "Total exploits" — spec only has "known-exploited status, when supported by a trusted source" →
+    shown as a badge per finding, optionally a KPI if the backend provides it.
+  - "Download report" — no export defined in the spec. [OPEN Q9]
+  - Week-over-week delta % — only if analytics history provides it; never fabricate. [SPEC 18]
+
+-----------------------------------------------------------------------------------------------------
+2.C  Logs.jfif — LOGS / EVENT STRUCTURE
+-----------------------------------------------------------------------------------------------------
+What it shows
+  A card-grid dashboard over a dark violet-tinted background. Top bar with brand, a "User Type" selector
+  and icon buttons. Icon-only left rail. Left column: "Violations Summary" with stacked severity cards
+  (thin coloured left marker, label, big count, "+N new", View). Centre: tabbed panel ("Real-time Scans" /
+  "Historical Audits"), grouped bar chart by severity over time, line chart with a hover tooltip.
+  Right column: donut + legend, "Event Types" cards with counts and trend chips. Bottom: KPI strip.
+  Small "Incident Timeline" table: Event / Time / Status chip.
+
+What to adopt (and why)
+  - Severity summary as a vertical stack with a thin coloured left marker: compact, scannable, filterable.
+  - Every panel = icon + title header, consistent padding, the same card surface → strong structure.
+  - Segmented tabs in a panel header to switch the dataset (live vs historical).
+  - Charts placed in their own cards, with axis labels, legend and tooltip ([SPEC 20.6]).
+  - Clear grouping: summary (left) → main content (centre) → context (right).
+  - Translated to Logs: a severity/category summary rail on the left, a dense log table in the centre,
+    an event detail panel on the right, an event-volume chart above the table.
+
+What NOT to adopt
+  - Drag handles / "Add Widget" (customisable dashboards are not in the spec).
+  - Donut "Risk by Application", "Detection confidence" — not in the spec.
+  - Purple glowing "Security Query" button — not in the spec.
+
+-----------------------------------------------------------------------------------------------------
+2.D  Colors.jfif — COLOURS, SHADOWS, DEPTH
+-----------------------------------------------------------------------------------------------------
+What it shows
+  Deep blue-violet near-black background (~#0E0D1A), sidebar slightly darker, main content inside a large
+  raised container with rounded corners (~14px) and a 1px faint border. KPI cards with a subtle violet
+  radial glow in one corner. Active nav item = violet gradient pill. Table header row on a slightly
+  lighter strip; rows separated by hairlines. State pills: soft tinted background + coloured dot + text
+  (blue Running, green Completed, amber Pending). Small severity counters with coloured icons.
+
+What to adopt (and why)
+  - Layered surfaces: background < sidebar < content container < card < hovered row < popover.
+    Each layer only ~3–5% lighter, separated by hairline borders → depth without heavy shadows.
+  - Violet as the brand/interaction colour (active nav, primary button, focus ring, selection).
+  - Pills = tinted background + dot + text label → status never depends on colour alone.
+  - Inner glow on hero cards — use sparingly (only the Overview KPI row).
+  - Soft, wide, low-opacity shadows only on floating elements.
+
+What NOT to adopt
+  - Gradient-filled cards everywhere, "Upgrade plan" promo, avatar with role dropdown as product feature.
+
+-----------------------------------------------------------------------------------------------------
+2.E  navbar.jfif — NAVIGATION (extra reference)
+-----------------------------------------------------------------------------------------------------
+What it shows
+  A full-text sidebar with collapsible uppercase GROUP labels (PRINCIPAL, SÉCURITÉ, INTELLIGENCE,
+  OPÉRATIONS), icon + label items, solid blue active pill, small "New/Live" badges, a system-status
+  footer ("Système actif"), page header with title + subtitle + clock + refresh button.
+
+What to adopt
+  - Grouped navigation with small uppercase group labels — needed because the spec has 15 sections
+    [SPEC 4.2: "related sections may be visually grouped, but every module must remain easy to find"].
+  - Header pattern: title + one-line purpose + data freshness ("Updated 12:04") + Refresh button
+    [SPEC 23.6 data freshness must be visible].
+  - Sidebar footer with platform/agent health indicator.
+  - Count badges on items (e.g. open Alerts) instead of marketing badges ("New", "Pro").
+
+=====================================================================================================
+DELIVERABLE 3 — UNIFIED VISUAL DIRECTION
+=====================================================================================================
+
+Name of the direction: "Night Console"
+  A dark, layered, violet-tinted operations console. Calm grey/graphite surfaces, violet for interaction,
+  a strict semantic status palette (green / amber / orange / red / blue / grey) for meaning only.
+
+How the references merge
+  ┌───────────────────────┬─────────────────────────────────────────────────────────────────────┐
+  │ From Colors + navbar  │ Global shell, surface layers, violet interaction colour, pills,       │
+  │                       │ grouped sidebar, page header with freshness + refresh.                │
+  │ From Assets           │ The 3-zone workspace pattern (list | canvas | detail panel), square    │
+  │                       │ card nodes, grid canvas, minimap, red/green-only meaning, detail       │
+  │                       │ sections with drill-down rows, copy-to-clipboard. Reused for ALL       │
+  │                       │ "inspect a record" interactions (right detail panel).                  │
+  │ From Vulnerabilities  │ The default TABLE style for every list page: few columns, two-line     │
+  │                       │ cells, square severity tile, quiet chips, generous rows, KPI strip.    │
+  │ From Logs             │ The DENSE variant of the table (32px rows, monospace timestamps), the  │
+  │                       │ left summary rail with coloured markers, card headers with icon +      │
+  │                       │ title + segmented tabs, chart cards.                                   │
+  └───────────────────────┴─────────────────────────────────────────────────────────────────────┘
+
+The Assets reference is pure neutral black/graphite; the Colors reference is violet-navy. The unified
+palette uses a graphite base with a very slight violet tint (hue ~250°) so both feel native: the
+topology canvas stays almost neutral (the colours of nodes must dominate), while the shell carries the
+violet identity.
+
+Principles
+  1. Colour = meaning. Only status/severity colours and the single violet accent. No decorative colour.
+  2. Depth by surface lightness + hairline borders first, shadow second (only for floating layers).
+  3. One record inspector pattern: a right-side detail panel (480px) everywhere; full pages only for
+     Device detail and Container detail ([SPEC 7.3, 14.4] require dedicated pages).
+  4. Two table densities: "comfortable" (52px, Vulnerabilities style) and "compact" (36px, Logs/Ports style).
+  5. Unknown / stale / unavailable have their own neutral visual treatment — never green [SPEC 5.2, 23.7-8].
+  6. Radius small (6px controls, 10px cards, 14px shell container). Not pill-everything.
+  7. Motion: 120–200ms ease-out for hovers/panels; no decorative animation. Respect prefers-reduced-motion.
+  8. Dark theme is the primary and only theme in v1 [DESIGN] (light theme = [OPEN Q11]).
+
+=====================================================================================================
+DELIVERABLE 4 — COMPLETE FRONTEND APPLICATION SPECIFICATION
+=====================================================================================================
+
+4.0 Page / module inventory (everything found in NekkoGuardLogic.txt)
+
+  #   Module (nav label)                 Routes                                         Spec
+  --  ---------------------------------  ---------------------------------------------  ------
+  A   Authentication & Account           /login, /login/mfa, /password-reset,          3
+                                         /password-reset/confirm, /account/profile,
+                                         /account/security (MFA, recovery codes),
+                                         /account/sessions
+  1   Overview                           /overview                                      5
+  2   Network Discovery & Topology       /network (topology), /network?view=list,       6
+                                         /network/discovery (runs + config),
+                                         /network/history
+  3   Devices                            /devices, /devices/:id/:tab                     7
+  4   Ports & Services                   /ports                                          8
+  5   Software Inventory                 /software, /software/:packageName               9
+  6   Vulnerabilities                    /vulnerabilities (+ ?finding=:id panel)         10
+  7   Certificates                       /certificates (+ ?cert=:id panel)               11
+  8   Email & Domain Exposure            /exposure (domains, exposures, email checks)    12
+  9   Pi-hole                            /pihole                                         13
+  10  Containers                         /containers (hosts + containers),               14
+                                         /containers/:hostId/:containerId/:tab
+  11  Logs                               /logs (+ ?event=:id panel)                      15
+  12  Agents                             /agents (+ ?agent=:id panel), /agents/register  16
+  13  Alerts                             /alerts (+ ?alert=:id panel)                    17
+  14  Analytics & Reports                /analytics                                      18
+  15  Settings                           /settings/organization/*, /settings/platform/*  19
+  G   Global elements                    shell, context selector, global search,         2.2, 4.3,
+                                         403 / 404 / error pages                         4.4, 23
+
+  Detail panels are addressable through the URL query string so they can be linked, shared and survive
+  reload [DESIGN].
+
+4.1 Application shell (applies to every authenticated page)
+
+  Layout (desktop ≥1280px)
+  ┌──────────┬────────────────────────────────────────────────────────────────────────────┐
+  │ SIDEBAR  │ TOP BAR: [Org ▾] / [Client ▾] / [Site ▾] / [Network ▾]   [⌕ Search…  ⌘K]   │
+  │ 248px    │          [Alerts bell (count)] [User menu]                                  │
+  │          ├────────────────────────────────────────────────────────────────────────────┤
+  │ logo     │ PAGE HEADER: Title  · one-line purpose        Updated 12:04 · [⟳ Refresh]  │
+  │ groups   │              (breadcrumbs on detail pages)    [page-specific actions]      │
+  │ items    ├────────────────────────────────────────────────────────────────────────────┤
+  │          │ PAGE CONTENT (scrolls; topology page uses full height, no page scroll)     │
+  │ status   │                                                                            │
+  └──────────┴────────────────────────────────────────────────────────────────────────────┘
+
+  Sidebar groups [DESIGN — grouping allowed by SPEC 4.2]
+    MONITOR      Overview · Network Discovery & Topology · Devices
+    EXPOSURE     Ports & Services · Software Inventory · Vulnerabilities · Certificates · Email & Domain Exposure
+    OPERATIONS   Pi-hole · Containers · Logs · Agents
+    RESPONSE     Alerts · Analytics & Reports
+    (bottom)     Settings
+    footer       Agent health summary: "● 3 agents online · 1 unavailable" (links to /agents)
+  - Active item: violet tinted pill + 2px violet left marker + white text. Hover: surface-3 background.
+  - Badges: numeric only (open alerts, critical vulns). Hidden when 0 or unknown.
+  - Collapsible to a 64px icon rail (tooltip on hover); collapsed state remembered in localStorage.
+  - Items the role cannot access are hidden; backend still enforces [SPEC 2.3].
+
+  Context selector [SPEC 2.2, 4.3]
+  - Breadcrumb-style chained dropdowns: Organization → Client → Site → Network. Client/Site/Network have an
+    "All" option. The organization is always visible and never "All".
+  - Changing the organization: clears selected client/site/network, invalidates ALL cached data
+    (TanStack Query cache cleared), navigates to the same module root, shows a toast "Switched to <Org>".
+  - Context is stored in the URL (?org=&client=&site=&network=) + localStorage default.
+
+  Global search [SPEC 4.4]
+  - Input in top bar, opens a command-palette modal (Ctrl/⌘+K).
+  - Results grouped by type: Devices, Services/Ports, Software, Vulnerabilities, Certificates, Containers,
+    Events. Each result: type icon, primary text, monospace secondary (IP / MAC / CVE / fingerprint),
+    context (client/site). Enter → opens the record. Results scoped to current org, filtered by backend.
+  - States: typing (<2 chars: recent searches), loading skeleton rows, "No results in <Org>", error inline.
+
+  Page header
+  - Title (H1), purpose line (muted), freshness ("Updated 2 min ago", amber "Stale — last update 3 h ago"
+    when older than the module's freshness threshold [OPEN Q12]), Refresh button, primary action(s).
+
+  Shell states
+  - Session expired → redirect to /login?next=…
+  - 403 for a module → in-page "You don't have access to <Module> in <Org>" (no data leaked).
+  - Backend unreachable → top banner (danger) "Cannot reach NekkoGuard server. Retrying…".
+
+  Responsive
+  - 1280+: full layout. 1024–1279: sidebar collapsed to icon rail. 768–1023 (tablet): sidebar becomes an
+    overlay drawer; context selector collapses into one "Context" button; detail panels become full-width
+    sheets. <768: supported read-only best effort (stacked), not optimised [SPEC 20.7].
+
+4.2 Standard page anatomy and shared states
+
+  List page template ("Registry" layout — Vulnerabilities style)
+    Page header → optional KPI strip (3–5 cards) → Filter bar → Table card → right Detail panel on row click.
+  Filter bar: search input (left), filter dropdown chips, active-filter chips with ×, "Clear all",
+    result count ("245 findings"), density toggle, column picker.
+  Table: sticky header, sortable columns, row hover, row click → panel, keyboard ↑/↓ + Enter,
+    server-side pagination (25/50/100), technical values in monospace with copy-on-hover.
+
+  Loading: skeleton rows/cards matching final layout (no spinner-only pages). Inline spinner on Refresh.
+  Empty: icon + one sentence explaining WHY + next step, e.g. "No devices discovered in Home network yet.
+    Run a discovery to populate the inventory. [Start discovery]" (action only if role permits) [SPEC 23.12].
+    Separate copy for "no results for these filters" → [Clear filters].
+  Error: card with danger icon, the backend error message (sanitised), request id if provided, [Retry].
+  Unknown values: rendered as "Unknown" in text-muted italic — never blank, never "0" [SPEC 23.7, 18].
+  Stale data: amber "Stale" chip next to freshness timestamp + tooltip with last successful update.
+  Unavailable integration: neutral grey card "Pi-hole integration unavailable since <time>" + link to Settings.
+
+4.3 Authentication & account pages [SPEC 3]
+
+  Purpose: secure access, MFA enrolment and recovery, session control, profile.
+  Layout: "entrance" layout — centred 400px card on the background, product logo above, no sidebar.
+  Pages
+  - Login: email, password, "Forgot password?", submit. Errors: invalid credentials (generic message),
+    rate-limit lock "Too many attempts. Try again in N minutes." (from backend).
+  - MFA challenge: 6-digit TOTP input (auto-advance, paste support) + "Use a recovery code" link.
+  - Password reset request / confirm: email form → generic confirmation ("If an account exists…").
+  - Account › Profile: name, email (read-only or change flow per backend), save.
+  - Account › Security: MFA status card ("MFA enabled" green pill / "MFA not enabled" amber pill +
+    "Required by your organization" when policy enforces it). Enrolment wizard: 1) scan QR + manual key,
+    2) confirm code, 3) recovery codes shown ONCE with Copy / Download .txt and a mandatory checkbox
+    "I have stored these codes" before closing. Afterwards only "Regenerate recovery codes" (with
+    confirmation) — codes are never re-displayed [SPEC 3].
+  - Account › Sessions: table (device/browser, IP shown as returned by backend, last activity, current
+    session badge), "Sign out" per session, "Sign out all other sessions" (confirm).
+  - Logout: user menu → immediate logout → /login.
+  Backend dependency: allauth headless API or custom endpoints [OPEN Q3].
+
+4.4 Overview [SPEC 5]
+
+  Purpose: environment state at a glance; every element links to its detailed page.
+  Layout (12-column grid)
+    Row 1 — KPI strip (6 compact cards): Devices (total · online · offline), Networks monitored,
+            Agents (active · unavailable), Open vulnerabilities (critical · high), Expiring certificates,
+            Containers (running · stopped).
+    Row 2 — left 8 cols: "Network activity" chart card (Pi-hole DNS queries vs blocked over time, tabs
+            24h/7d/30d). right 4 cols: "Security" stack — newly discovered devices, newly exposed ports,
+            recent security alerts (Logs-style stack with coloured left markers + View links).
+    Row 3 — left 6 cols: "Services" — detected open ports count, important service changes list,
+            Docker host status list. right 6 cols: "Recent activity" timeline (new devices, status changes,
+            new vulns, certificate changes, agent connection changes, container events) with type icon,
+            time, link.
+  States: each card loads/errors independently. A card whose source is unavailable shows the grey
+  "Unavailable" treatment — not zero, not green [SPEC 5.2]. Health summary uses 5 states:
+  healthy, warning, critical, unavailable, unknown.
+  Interactions: click any KPI → module with matching filter applied (e.g. Vulnerabilities?severity=critical,high&status=open).
+
+4.5 Network Discovery & Topology [SPEC 6] → full detail in Deliverable 5.
+
+  Sub-pages
+  - Topology (default) and List view (toggle; same data, same filters) [SPEC 6.7].
+  - Discovery: discovery configurations per network (subnet, scope, site, client, role-permitted settings),
+    "Start discovery" (confirm dialog listing exact scope), runs table (status, start, completion, devices
+    discovered, errors, last successful) with run detail panel [SPEC 6.8]. Only authorized ranges selectable
+    (from Settings › Authorized discovery ranges) [SPEC 6.8, 22].
+  - History: discovery change feed (new devices, no longer detected, online/offline, IP change, hostname
+    change, vendor/info change, new service, changed service) filterable by network/type/time [SPEC 6.9].
+
+4.6 Devices [SPEC 7]
+
+  Inventory page (Registry layout, comfortable density)
+  - Columns: Device (category icon + name, 2nd line hostname) · IP · MAC · Type · Manufacturer · Client ·
+    Site · Network · Status pill · Last seen (relative, absolute in tooltip).
+  - Flags column icons: managed / ignored / under investigation; labels as small chips.
+  - Filters: search (name/IP/MAC), type, status, client, site, network, group, flag.
+  - Bulk select → assign group / mark managed / ignored / investigate (role-gated).
+  - Row click → opens Device detail page (not panel — spec requires a dedicated page).
+
+  Device detail page (/devices/:id/:tab)
+  - Breadcrumb: Devices › <name>. Header card: category icon, name, status pill, IP/MAC (copy), vendor,
+    OS, client/site/network, first discovered, last seen, freshness. Actions: Edit labels/notes, Group,
+    Mark managed / ignored / investigate, "Show in topology".
+  - Tabs (URL-addressable): Overview · Network · Ports & Services · Software · Vulnerabilities ·
+    Certificates · Containers · Logs & Events · History. Each tab reuses the module's table component
+    pre-filtered by device (no duplicate implementations).
+  - Manual vs discovered data: manually entered fields carry a small "Manual" chip + pencil icon and a
+    tooltip "Entered by <user> on <date>"; discovered fields carry "Discovered" source tooltip [SPEC 7.4].
+  - Notes: markdown-free plain text area with author/time list.
+
+4.7 Ports & Services [SPEC 8]
+
+  Layout: Registry, compact density (port data is dense).
+  - KPI strip: open ports, new in last 24h, no longer available (24h), services with uncertain identification.
+  - Columns: Device · IP · Port (monospace, right-aligned) · Protocol (TCP/UDP chip) · Service ·
+    Version · Confidence (Confirmed ✓ / Uncertain ? chip) · Detected · Status (Open / Closed / New / Gone).
+  - Tabs: Current | Changes (timeline of opened/closed/changed services).
+  - Filters: device, network, port, protocol, service, status, confidence.
+  - Detail panel: port/service facts, evidence, history sparkline (open/closed over time), links to
+    device, related certificate (if TLS), related vulnerabilities.
+  - "Uncertain" identification uses dashed-border chip + "?" icon, never the same as confirmed [SPEC 8.3].
+
+4.8 Software Inventory [SPEC 9]
+
+  Layout: Two levels.
+  - /software: package-centric table — Package · Source/package manager · Versions installed (count + range)
+    · Devices (count) · Update status (Up to date / Outdated / Unknown) · Last inventory update.
+    Toggle "By package | By device".
+  - /software/:packageName: package page — version distribution bar (versions × device count), devices
+    table (device, OS, version, source, last update, update status), change history.
+  - Filters: search package, device, OS, source, update status.
+  - Explicit rule [SPEC 9.3]: "Outdated" uses amber outline chip with text "Outdated" — never the
+    vulnerability red; a link "Check vulnerabilities for this package" leads to Vulnerabilities filtered.
+
+4.9 Vulnerabilities [SPEC 10] (Vulnerabilities reference)
+
+  Layout
+  - KPI strip (3 cards, reference style): Open findings · Critical & High open · Known-exploited (if source
+    available, else hidden) · Affected devices.
+  - Severity summary chips row: Critical n · High n · Medium n · Low n · None/Unknown n (click = filter).
+  - Main table card, comfortable density, few columns:
+      [Severity tile] | Title (line 1) + CVE chip, Known-exploited badge, "Potential match" badge (line 2) |
+      Affected device | Software/service + detected version | First detected | Status chip
+  - Detail panel (480px): header with severity tile + CVE + status dropdown; sections:
+      Summary · CVSS (score, vector, version — when available) · Affected (device, software/service,
+      version, links) · Evidence (raw evidence in monospace block) · Detection (source, first/last seen) ·
+      Remediation · Status history (timeline: who, when, from → to, comment).
+  - Status workflow: Open → Acknowledged → Resolved | False Positive (role-gated, comment required for
+    False Positive [DESIGN], every change recorded [SPEC 10.3]).
+  - Filters: severity, CVE id, device, software, status, detection date range, org/client/site (from context).
+  - Default sort: severity desc, then first detected desc. Default filter: status = Open.
+  - Confirmed vs potential [SPEC 10.4]: potential matches get a dashed outlined "Potential" badge and their
+    severity tile uses the outline-only variant.
+  - Visual restraint: only Critical uses a filled red tile; High = orange outline+tint; Medium = amber;
+    Low = blue-grey. "Critical findings prominent without overwhelming" [SPEC 10.4, 20.5].
+
+4.10 Certificates [SPEC 11]
+
+  - KPI strip: Valid · Expiring ≤30d · Expired · Self-signed · Invalid/untrusted · Changed.
+  - Table: Common name (line 1) + issuer (line 2) · Status chips (can be multiple: e.g. Self-signed +
+    Expiring) · Expires (date + "in 12 d" bar coloured by remaining validity) · Endpoints (count;
+    tooltip list device:port/service) · Last observed.
+  - Detail panel: Subject, CN, Issuer, SANs (chip list), Valid from/to, remaining validity,
+    fingerprint (monospace, wrapped, copy), chain (vertical list leaf → intermediate → root with trust
+    icon), endpoints table (device, IP, port, service, last observed) [SPEC 11.3 multiple endpoints],
+    change history (previous fingerprint vs new).
+  - Filters: search (CN, SAN, fingerprint), status, issuer, device, expiry window.
+
+4.11 Email & Domain Exposure [SPEC 12]
+
+  Tabs: Domains · Exposures · Email security.
+  - Domains: table (domain, verification status pill, monitoring status, last check), "Add domain" →
+    side panel with verification instructions (method returned by backend [OPEN Q8]), verify button.
+  - Exposures: table (source, exposure date or "Unknown", affected addresses (masked partially per
+    backend), status: Reported / Reviewed / Resolved [OPEN Q8]). Copy: "Reported exposure" —
+    never "compromised" [SPEC 12.4]. No password/secret field exists in the UI at all.
+  - Email security: one card per domain with three check rows SPF / DKIM / DMARC: result pill
+    (Pass / Misconfigured / Missing / Unknown), the observed record in monospace, a plain-language
+    explanation, last checked.
+
+4.12 Pi-hole [SPEC 13]
+
+  - Integration status bar at top: Connected (green) / Stale (amber) / Disconnected (grey) with last
+    successful sync [SPEC 13.3].
+  - Time range segmented control: 24h · 7d · 30d · custom.
+  - KPI strip: Total queries · Blocked · Blocked % · Active clients.
+  - Chart card: queries vs blocked over time (stacked area, labelled axis, legend, units).
+  - Three ranked lists (Logs reference style): Top clients · Top domains · Top blocked domains — each row
+    with proportional bar; click → filtered query log below.
+  - Query log table (compact): time, client, domain, type, result (Allowed/Blocked chip).
+  - Disconnected: data cards replaced by "Pi-hole integration unavailable since <time>" + last known data
+    clearly labelled "Last known (stale)".
+
+4.13 Containers [SPEC 14]
+
+  - /containers: top section = Docker hosts as compact cards (name, host status, connection status, last
+    update, org/client/site). Selecting a host filters the container table; "All hosts" default.
+  - Container table: Name · Host · Image:tag (monospace) · Status pill (Running/Exited/Restarting/Paused/
+    Unhealthy) · Ports (chips "8080→80/tcp") · Created/started · CPU/Mem (mini bars, "Unknown" if absent) ·
+    actions menu (Start/Stop/Restart — role-gated).
+  - Container detail page: tabs Overview · Image · Ports · Volumes · Networks · Logs · Resources ·
+    Compose project. Logs tab: monospace viewer with tail N lines, follow toggle (if streaming
+    available [OPEN Q5]), search highlight, wrap toggle.
+  - Action confirmation modal [SPEC 14.5]: title "Restart container?", shows Host name, Container name, ID
+    (short), image; danger/primary button with the verb; result toast; action appears in Logs/audit.
+  - No terminal/exec/console features anywhere [SPEC 14.5].
+
+4.14 Logs [SPEC 15] (Logs reference)
+
+  Layout ("Console" layout)
+  ┌─────────────────┬──────────────────────────────────────────────────────┬───────────────────┐
+  │ SUMMARY RAIL    │ Event volume chart (stacked by severity, 1 row,      │ EVENT DETAIL      │
+  │ 240px           │ 120px high, brush to select time)                    │ PANEL 440px       │
+  │ Severity stack  ├──────────────────────────────────────────────────────┤ (when a row is    │
+  │ (marker+count)  │ Filter bar: search · time range · device · source ·  │ selected)         │
+  │ Sources list    │ severity · category · [Clear]                        │ Summary           │
+  │ (counts)        ├──────────────────────────────────────────────────────┤ Fields (k/v grid) │
+  │ Categories      │ Compact table: Time (mono) │ Sev │ Source │ Device │ │ Raw event (mono,  │
+  │ (counts)        │ Category │ Description (truncated, 1 line)           │ copy, wrap)       │
+  │                 │ ... virtualised rows, sticky header ...              │ Related: device,  │
+  │                 │                                                      │ alerts            │
+  └─────────────────┴──────────────────────────────────────────────────────┴───────────────────┘
+  - Summary rail items act as toggle filters (Logs reference "Violations Summary").
+  - Row severity shown as a 3px left colour bar + text label in the Sev column.
+  - Timestamps: local time with timezone toggle (Local/UTC); full ISO in panel.
+  - Day separators in the table ("Today", "Yesterday", date) for scanning.
+  - Live mode toggle ("Live" with pulsing dot) only if backend provides streaming [OPEN Q5]; otherwise
+    Refresh + auto-refresh interval select.
+  - Related navigation: "Open device", "Related alerts (n)" [SPEC 15.3].
+  - Sensitive data: the frontend displays what backend returns; redaction is backend responsibility
+    [SPEC 22] — the raw block never adds client-side data.
+
+4.15 Agents [SPEC 16]
+
+  - KPI strip: Connected · Disconnected · Disabled · Revoked · With recent errors.
+  - Table: Agent name (line 1) + ID (mono, line 2) · Version · Client/Site · Host · Connection pill ·
+    Last check-in (relative, amber if late) · Categories (chips) · Errors (count, red if >0).
+  - Detail panel: identity, version, host, scope (list of authorised ranges), collected categories,
+    reporting status timeline (check-ins), recent errors list, actions: Disable (confirm), Revoke
+    (danger confirm with typed agent name, irreversible text) [SPEC 16.3].
+  - /agents/register: stepper — 1) name + client/site, 2) scope from authorised ranges + categories,
+    3) enrolment token/command shown ONCE (copy) with warning; never shown again [SPEC 22].
+
+4.16 Alerts [SPEC 17]
+
+  - Tabs: Open · Acknowledged · Resolved · Muted categories.
+  - List (comfortable): severity marker + Title (line 1) / category + affected item (line 2) · Client/Site
+    · Detected · Latest update · Assignee (avatar initials or "Unassigned") · Status chip.
+  - Detail panel: description, severity, category, affected org/client/site/device/service (links),
+    evidence block, timeline of state changes, actions: Acknowledge, Resolve, Assign (user picker),
+    Mute category (role-gated, with duration if backend supports [OPEN Q10]).
+  - Bulk actions on selection: acknowledge, assign.
+  - Top-bar bell shows open alert count and a dropdown of the latest 5.
+
+4.17 Analytics & Reports [SPEC 18]
+
+  - Controls bar: time range (24h/7d/30d/90d/custom) + context (from global selector) [SPEC 18].
+  - Chart cards grid (each answers one operational question, with title, unit, legend, empty/unknown gaps):
+      Device count over time (line) · Online/offline trend (stacked area) · New vs no-longer-detected
+      devices (diverging bars) · Open-port changes (bars) · Vulnerability trend by severity (stacked area) ·
+      Certificate expiration outlook (bars by week, next 90 days) · Agent availability (% line) ·
+      Pi-hole activity (area) · Container status history (stacked bars) · Important changes (timeline list).
+  - Missing data intervals rendered as gaps with hatched background, labelled "No data" — never zero
+    [SPEC 18].
+  - Each card has "Open in <module>" link. "Reports" = export not defined → [OPEN Q9].
+
+4.18 Settings [SPEC 19]
+
+  Layout: Settings has its own secondary left navigation inside the content area.
+  Organization settings (Owner/Admin):
+    Details · Clients · Sites · Networks · Authorized discovery ranges · Users · Roles & permissions ·
+    Email domains (links to Exposure › Domains) · Integrations (Pi-hole, Docker hosts, others) ·
+    Notifications · Data retention · Activity history.
+  Platform settings (Platform Administrator only):
+    Organizations · Platform configuration · Platform users & permissions · Deployment settings ·
+    Platform activity.
+  Patterns
+  - CRUD tables + side panel forms; deletes need confirmation with consequences listed.
+  - Secret fields (integration tokens): write-only input; after save shows "•••• Saved on <date>" with
+    "Replace" button — never displays the value [SPEC 19.2].
+  - Roles page: matrix (roles × capabilities) read-only unless backend allows editing [OPEN Q4].
+  - Activity history: Logs-style compact table (who, action, target, when).
+
+4.19 Error pages
+  - 404 "Page not found", 403 "No access in this organization", 500 "Something went wrong" — inside the
+    shell when authenticated, entrance layout otherwise. Each with link back to Overview.
+
+=====================================================================================================
+DELIVERABLE 5 — NETWORK DISCOVERY & TOPOLOGY UI SPECIFICATION
+=====================================================================================================
+
+Note: [SPEC 6.2] refers to "three reference images" for this page. Only ONE topology image (Assets.jfif)
+was supplied. This spec follows Assets.jfif; the two missing images are [OPEN Q1].
+
+5.1 Page layout (desktop, full viewport height, no page scroll)
+
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Page header: "Network Discovery & Topology" · scope line · Updated 12:04 [Stale?] · [⟳]       │
+  │              [Topology | List]  [Start discovery ▸]                                            │
+  ├──────────────────┬──────────────────────────────────────────────────┬────────────────────────┤
+  │ LEFT PANEL 340px │ CANVAS (flex)                                     │ DEVICE PANEL 400px      │
+  │ ┌──────────────┐ │ ┌─ toolbar (top-left, floating) ───────────────┐ │ (hidden until a node is │
+  │ │Network card  │ │ │ Group by: [Subnet▾]  Relations: [Observed▾]   │ │ selected; canvas grows) │
+  │ │name · subnet │ │ └──────────────────────────────────────────────┘ │                         │
+  │ │● n online    │ │                                       ┌minimap┐  │ Header                  │
+  │ │last discovery│ │      ┌─ group: <SUBNET> ──────────┐   └───────┘  │ Key facts grid          │
+  │ │status chip   │ │      │  [node] ─── [node]         │              │ [Open device page]      │
+  │ └──────────────┘ │      │     │                      │              │ Relationships           │
+  │ Search           │      │  [node]    [node]          │              │ Services & ports        │
+  │ Filter chips     │      └────────────────────────────┘              │ Security                │
+  │ Active filters   │                                                  │ Activity timeline       │
+  │ ───────────────  │ ┌ legend (bottom-left, collapsible) ┐ ┌zoom ctrls┐ │                         │
+  │ Device list      │ └───────────────────────────────────┘ └──────────┘ │                         │
+  │ (virtualised)    │ Discovery status strip (bottom): running ▓▓▓░ 62% │                         │
+  └──────────────────┴──────────────────────────────────────────────────┴────────────────────────┘
+
+5.2 Left panel (Assets reference "Network" + "Devices")
+  - Network summary card: network name, subnet (mono), site/client, online count / total, last successful
+    discovery (relative), discovery status chip (Idle / Running / Failed / Never run). Click → Discovery tab.
+    If several networks in scope: a compact list of network cards; selecting one zooms the canvas to its group.
+  - Search: "Search by name, IP or MAC". Matching nodes highlight on canvas; non-matching dim to 35%.
+  - Filter chips (dropdown chips): Device type · Status · Subnet · (Client/Site/Network come from the global
+    context selector) [SPEC 6.6]. Active filters as removable chips + "Clear all" → full network view.
+  - Device list cards (Assets style, 64px): category icon (coloured by status), name + IP (mono, muted),
+    line 2: status text + vendor, right: last seen relative. Selected card: 1px white outline. Hover over
+    a card → corresponding node gets a hover ring on canvas; click → selects node and centres it.
+  - Panel collapsible (<<) to give canvas more room.
+
+5.3 Canvas
+  - Background: --canvas-bg with a dot grid (1px dots, 24px spacing, --grid-dot). Grid moves with pan.
+  - Grouping [SPEC 6.3 "group devices logically"]: default group by Subnet; alternatives: Device type,
+    Site, None. Group = rounded rectangle container, 1px dashed --border-subtle, label top-left
+    ("<SUBNET> · 14 devices"), very faint fill. Groups are collapsible: collapsed group = single
+    aggregated node "14 devices · 2 offline".
+  - Layout engine: hierarchical/layered (ELK "layered" with compound groups). Router/gateway (when the
+    category is known) on top, infrastructure devices next, endpoints below. Deterministic: same data →
+    same positions. User-dragged positions are kept per network in localStorage [DESIGN].
+  - Fit-to-view on first load and on "Fit" button / F key [SPEC 6.3].
+
+5.4 Nodes
+  - Shape: 168×88 card, radius 6px, background --surface-2, 1px border --border-default (Assets style).
+    Content (centred): 20px category icon (top), name (13px/600, truncate with tooltip), IP (12px mono,
+    muted), optional bottom row: small counters with icons (open vulns n in red/orange, open alerts n).
+    Counters only displayed when data exists; no counter = no data or zero (tooltip distinguishes).
+  - Category icons (lucide): Router=router, Switch=network, Server=server, Workstation=monitor,
+    Laptop=laptop, Mobile=smartphone, Raspberry Pi=cpu (+ "Pi" micro-label), IoT=radio,
+    Printer=printer, Unknown=help-circle [SPEC 6.4]. Unknown category is explicit — no guessing [SPEC 6.4].
+  - Status encoding (icon colour + status dot + text in tooltip, never colour only):
+      Online   → icon --success, dot filled green
+      Offline  → icon --text-muted, card opacity 70%, dot hollow grey, label "Offline"
+      Unknown  → icon --text-muted, dashed card border, "?" dot
+      Stale (last seen older than threshold) → amber clock micro-icon top-right
+      Has critical/high open finding → red counter + (only when selected or filter "At risk") red glow
+  - States:
+      default · hover (border --border-strong, elevate shadow-1) · selected (2px --text-primary border +
+      radial glow: red if critical issue, violet otherwise — Assets reference) · search-match (violet
+      ring) · dimmed (35% opacity) · new since last discovery ("NEW" micro-badge, violet).
+  - Level of detail by zoom: <0.5 zoom → node collapses to a 28px icon tile (no text); 0.5–0.8 → icon +
+    name; ≥0.8 → full card. Keeps large graphs readable [SPEC 6.3].
+
+5.5 Edges / relationships [SPEC 6.10]
+  - Only relationships provided by backend are drawn. Two visual types:
+      Observed (e.g. ARP/neighbour/agent-reported link) → solid 1.5px --edge-default
+      Inferred (e.g. gateway-of-subnet)              → dashed 1.5px --edge-inferred + label "inferred" on hover
+  - Membership in the same subnet is shown by the GROUP container, never by edges between devices.
+  - Edge styling: smooth-step curves, no arrowheads unless direction is meaningful [OPEN Q2].
+  - Selected node: incident edges brighten to --text-secondary; edges to a node with a critical finding
+    use --danger (Assets "red path"). Other edges unchanged.
+  - Hover on edge → tooltip: relationship type, source of evidence, last observed.
+  - Relationships toggle in toolbar: Observed only | Observed + inferred | None.
+  - No midpoint "lock" icons or path analysis (no data) — dropped from the reference.
+
+5.6 Graph controls (bottom-right floating, Assets reference)
+  - Zoom in (+), Zoom out (−), Fit (⤢), Reset layout, Lock/unlock dragging, Fullscreen.
+  - Mouse: wheel = zoom, drag background = pan, drag node = move, click = select, double-click node = open
+    device page, Esc = clear selection. Keyboard: Tab cycles nodes, Enter selects, arrows pan.
+  - Minimap (top-right, 180×120, Assets reference): nodes as tiny rects coloured by status; viewport rect;
+    click/drag to navigate. Hidden below 1280px.
+  - Legend (bottom-left, collapsible): category icons, status encodings, edge types.
+  - Refresh button in page header refetches graph without losing zoom/selection [SPEC 6.3].
+
+5.7 Device panel (right, Assets "Device details") [SPEC 6.5]
+  Header: category icon + name (H3) + status pill, close (×), "Copy link".
+  Key facts grid (2 columns, label muted 12px / value 14px):
+    IP address (mono, copy) · MAC (mono, copy) · Network / subnet · Vendor · Device type · OS ·
+    First discovered · Last seen.
+  Primary action (full-width outlined violet button): "Open device page" → /devices/:id [SPEC 6.5].
+  Sections (icon header, collapsible, each with "View all ›" link to the matching device-page tab):
+    Relationships — list of connected devices (name, IP, relationship type: Observed/Inferred). Click →
+      selects that node on canvas.
+    Ports & services — top 5 rows: port/proto mono, service, confidence chip.
+    Security — drill-down rows (Assets "Security & Health"): "n open vulnerabilities ›",
+      "n certificates (1 expiring) ›", "n open alerts ›". Show "Unknown" when not collected.
+    Software — "n packages · last inventory <time> ›" (when available).
+    History — last 8 change events (time mono · description), "View full history ›" [SPEC 6.9].
+  Panel loading: skeleton per section. Section error: inline "Could not load ports. Retry".
+  Returning to full graph: × button, Esc, or click empty canvas → panel closes, canvas re-expands,
+  viewport stays where it was; "Fit" button returns to full network.
+
+5.8 Discovery status strip (bottom of canvas) [SPEC 6.8]
+  - Idle: "Last successful discovery 4 h ago · 37 devices · [History]".
+  - Running: progress bar (determinate if backend reports progress, else indeterminate), started at, devices
+    found so far, [View run]. Graph updates on completion (or live if streaming [OPEN Q5]); new nodes get
+    the NEW badge.
+  - Failed: danger strip with error summary + [View errors].
+
+5.9 List view [SPEC 6.7]
+  - Same filters/search/scope as topology (shared state in URL). Table (compact): status dot, name, IP, MAC,
+    type, vendor, OS, subnet, first discovered, last seen, open vulns. Row click → same device panel.
+  - "Show on map" row action switches to topology and focuses the node.
+
+5.10 Empty / error / scale states
+  - No networks configured: canvas empty state "No networks are configured for <Org>. Add an authorised
+    network in Settings." (+ link if role permits).
+  - Network configured but never discovered: "No discovery has run yet for <network>. [Start discovery]".
+  - Filters exclude everything: "No devices match these filters. [Clear filters]".
+  - Graph API error: canvas error card + Retry; left list still usable if its call succeeded.
+  - >300 nodes: groups start collapsed, LOD at lower zoom, edges hidden below zoom 0.4 [DESIGN].
+
+5.11 Responsive
+  - 1280+: three columns. 1024–1279: left panel collapses to a drawer button; device panel overlays canvas.
+  - Tablet (768–1023): canvas full width; left panel and device panel as bottom sheets; minimap hidden.
+  - <768: defaults to List view with a "Topology best viewed on a larger screen" note.
+
+5.12 Technology choice and implementation approach
+  Options evaluated
+    a) React Flow (@xyflow/react, MIT) — nodes are React components → the card-style nodes, counters,
+       badges, hover/selection states are plain JSX + CSS tokens. Built-in pan/zoom, MiniMap, Controls,
+       Background (dot grid), group/sub-flow nodes, viewport fitting. Good to ~1–2k nodes with LOD.
+    b) Cytoscape.js — strong graph algorithms and canvas rendering for very large graphs, but nodes are
+       canvas-drawn → the card UI from the reference is hard to reproduce; styling separate from CSS tokens.
+    c) D3-force hand-built — maximum control, much more code, force layouts are non-deterministic
+       and overlap labels (violates "avoid unnecessary overlap").
+    d) Sigma.js / WebGL — for 10k+ nodes; overkill for a home/SMB network.
+  Recommendation: (a) React Flow + elkjs for layout.
+    - elkjs "layered" algorithm with compound nodes gives deterministic hierarchical layout with subnet groups.
+      Run it in a Web Worker (elkjs ships a worker build) so layout never blocks the UI.
+    - Both are lazy-loaded only on the /network route (code splitting) — keeps the rest of the app light.
+    - Custom node types: DeviceNode, GroupNode, CollapsedGroupNode. Custom edge: RelationEdge (observed/inferred).
+    - Graph data → transformed in a pure function `toFlowGraph(devices, relations, grouping, filters)` that is
+      unit-tested; React Flow only renders.
+  Performance rules: memoised node components, `onlyRenderVisibleElements`, LOD by zoom, no shadows on
+  nodes at low zoom, virtualised left list.
+
+=====================================================================================================
+DELIVERABLE 6 — DESIGN SYSTEM
+=====================================================================================================
+
+6.1 Colour tokens (dark theme, CSS custom properties on :root)
+
+  Neutrals / surfaces (graphite with a slight violet tint, hue ~250)
+    --bg-app            #0B0B12   App background behind everything (Colors ref deep navy + Assets black)
+    --bg-sidebar        #0E0E17   Sidebar and top bar
+    --canvas-bg         #0C0C10   Topology canvas (more neutral, lets node colours lead — Assets ref)
+    --grid-dot          #1E1E28   Canvas dot grid
+    --surface-1         #13131D   Cards, panels, table containers
+    --surface-2         #191925   Nested surfaces: table header strip, inputs, topology nodes, KPI cards
+    --surface-3         #20202E   Hover rows, hovered nav items, segmented control active background
+    --surface-elevated  #1B1B28   Popovers, dropdowns, modals, detail panels (with shadow)
+    --border-subtle     #1F1F2B   Row separators, card outlines
+    --border-default    #2A2A3A   Inputs, node borders, dividers
+    --border-strong     #3A3A4E   Hover borders, focused containers
+    --overlay           rgba(5, 5, 10, 0.64)  Modal backdrop
+
+  Text
+    --text-primary      #ECECF3   Headings, values, primary content
+    --text-secondary    #A3A3B5   Labels, table secondary line, descriptions
+    --text-muted        #6E6E82   Metadata, timestamps, placeholders, "Unknown"
+    --text-disabled     #4A4A5C   Disabled controls
+    --text-on-accent    #FFFFFF   Text on violet / filled danger
+
+  Brand / interaction (Colors ref violet)
+    --primary           #7C6CF6   Primary buttons, active nav marker, links, selection, focus
+    --primary-hover     #8E80FF
+    --primary-pressed   #6A5AE0
+    --primary-subtle    rgba(124, 108, 246, 0.14)  Active nav pill, selected row, chip backgrounds
+    --focus-ring        0 0 0 2px #0B0B12, 0 0 0 4px #7C6CF6
+    --secondary         #2A2A3A   Secondary button background (neutral)
+    --accent            #22D3EE   Cyan, data accent ONLY in charts (2nd series) and "info" — never decoration
+
+  Status / semantic (Assets ref green/red, calibrated for dark bg; each has a 14% "subtle" bg)
+    --success   #3DDC84   subtle rgba(61,220,132,0.14)    Online, valid, connected, pass, resolved
+    --warning   #F5B83D   subtle rgba(245,184,61,0.14)    Stale, expiring, pending, outdated, acknowledged
+    --danger    #F0475B   subtle rgba(240,71,91,0.14)     Critical, offline-unexpected, expired, failed, errors
+    --info      #4EA1FF   subtle rgba(78,161,255,0.14)    Informational, running jobs, low severity
+    --neutral   #8A8AA0   subtle rgba(138,138,160,0.14)   Unknown, unavailable, disabled, revoked, ignored
+
+  Severity scale (vulnerabilities, alerts, logs — one scale everywhere)
+    --sev-critical  #F0475B   filled tile (white text)
+    --sev-high      #FF7A45   tinted tile + border
+    --sev-medium    #F5B83D   tinted tile + border
+    --sev-low       #4EA1FF   tinted tile + border
+    --sev-info/none #8A8AA0   outline only
+
+  Topology-specific
+    --edge-default   #3A3A4E   observed relation
+    --edge-inferred  #4A4A5C   dashed
+    --edge-active    #A3A3B5   incident edges of the selected node
+    --glow-danger    radial-gradient(closest-side, rgba(240,71,91,0.28), transparent)
+    --glow-select    radial-gradient(closest-side, rgba(124,108,246,0.24), transparent)
+
+  Contrast check (WCAG AA on --surface-1): text-primary ≈ 15:1, text-secondary ≈ 7.6:1,
+  text-muted ≈ 3.9:1 (used only ≥12px metadata, never for essential info), success/warning/danger/info
+  ≥ 4.5:1 for text.
+
+  Chart palette (in this order): #7C6CF6 violet, #22D3EE cyan, #3DDC84 green, #F5B83D amber,
+  #FF7A45 orange, #F472B6 pink. Severity charts always use the severity scale.
+
+6.2 Shadows and elevation
+  Elevation is mostly lightness + border. Shadows are dark, wide and soft.
+    --shadow-0   none                                                   flat cards inside cards
+    --shadow-1   0 1px 2px rgba(0,0,0,0.40)                             cards, KPI cards, nodes (hover)
+    --shadow-2   0 4px 12px rgba(0,0,0,0.45), 0 0 0 1px #2A2A3A          dropdowns, tooltips, popovers
+    --shadow-3   0 12px 32px rgba(0,0,0,0.55), 0 0 0 1px #2A2A3A         side/detail panels, floating graph controls
+    --shadow-4   0 24px 64px rgba(0,0,0,0.65), 0 0 0 1px #3A3A4E         modals, command palette
+    --shadow-nav inset -1px 0 0 #1F1F2B                                  sidebar edge (no drop shadow)
+    --glow-card  radial-gradient(120% 80% at 0% 0%, rgba(124,108,246,0.10), transparent 60%)
+                 Overview KPI cards only (Colors ref inner glow).
+  Interactive elements: no shadow by default; focus = --focus-ring; pressed = background darker.
+
+6.3 Typography
+  - UI font: "Inter" (variable, self-hosted woff2 in static/fonts — no Google CDN at runtime for a self-hosted
+    product). Fallback: system-ui, -apple-system, "Segoe UI", sans-serif.
+  - Mono font: "JetBrains Mono" (self-hosted). Used for IP, MAC, ports, versions, CVE ids, fingerprints,
+    container IDs, timestamps in logs, raw events. Fallback: ui-monospace, monospace.
+  - Font features: tabular numbers (`font-variant-numeric: tabular-nums`) on all numbers and tables.
+
+  Scale (size / line-height / weight)
+    display     32 / 40 / 600   KPI numbers
+    h1          22 / 28 / 600   Page titles
+    h2          17 / 24 / 600   Card / section titles
+    h3          15 / 22 / 600   Panel sub-sections, detail headers
+    body        14 / 20 / 400   Default text, table comfortable
+    body-strong 14 / 20 / 500   Table primary column, buttons
+    small       13 / 18 / 400   Compact tables, secondary lines
+    label       12 / 16 / 500   Form labels, key/value labels (text-secondary)
+    caption     11 / 14 / 600   Group labels (uppercase, letter-spacing 0.06em, text-muted), badges
+    mono-sm     12 / 18 / 400   Technical values
+  Headings never bold-over-600; colour carries hierarchy (primary vs secondary vs muted).
+
+6.4 Spacing and layout
+  - Base unit 4px. Scale: 0, 2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64.
+  - Page padding: 24px (desktop), 16px (tablet/mobile).
+  - Section spacing (between card rows): 24px. Card internal gap: 16px.
+  - Card padding: 20px (comfortable), 16px (compact), table cells 12px horizontal.
+  - Component gaps: icon↔label 8px, chip gap 6px, button group 8px, form fields 16px vertical.
+  - Row heights: comfortable 52px (two-line 60px), compact 36px, dense log 32px.
+  - Radius: --radius-xs 4px (chips, severity tiles), --radius-sm 6px (buttons, inputs, nodes),
+    --radius-md 10px (cards, panels), --radius-lg 14px (content container, modals), --radius-full (status dot, avatar).
+  - Content width: fluid; max 1600px for Overview/Analytics/Settings forms (forms max 720px); topology,
+    logs and tables full width.
+  - Breakpoints: sm 640 · md 768 · lg 1024 · xl 1280 · 2xl 1536.
+  - Fixed dimensions: sidebar 248 / 64 collapsed; top bar 56; detail panel 480 (440 logs, 400 topology);
+    topology left panel 340.
+
+6.5 Reusable components (all consume tokens only — no hard-coded colours)
+
+  Button     variants: primary (violet fill), secondary (surface-3 + border), ghost (text only),
+             danger (danger fill, only for destructive confirm), icon (32×32). Sizes sm 28 / md 34 / lg 40.
+             States: hover lighter, pressed darker, focus ring, disabled 40% opacity, loading (spinner, keeps width).
+  Input      34px, surface-2, 1px border-default, radius-sm; focus = border primary + focus ring; error =
+             danger border + message below; prefix/suffix icons; "write-only secret" variant.
+  Search     Input + search icon + clear (×) + keyboard hint chip; debounce 250ms.
+  Select/Dropdown  Trigger like input; menu = surface-elevated + shadow-2, items 32px, checkmark for selected,
+             multi-select with checkboxes, search inside if >8 options.
+  FilterChip "Label: value ▾"; active state primary-subtle background; removable (×).
+  Table      Sticky header (surface-2, caption-style labels), hairline row separators, hover surface-3,
+             selected row primary-subtle + 2px left marker, sortable header with arrow, column alignment rules
+             (numbers right, mono values left), comfortable/compact density, empty/error/loading rows,
+             pagination footer (range text + page size + prev/next). TanStack Table headless.
+  Card       surface-1, border-subtle, radius-md, header (icon 16 + h2 title + right actions/tabs), body.
+  KpiCard    label (icon + label), display number, context line; optional subtle delta chip ONLY if backend
+             provides comparison; "Unknown" state (— with muted "No data").
+  Badge/Chip neutral, primary, success, warning, danger, info; "outline" and "dashed" (potential/uncertain).
+  StatusPill dot + text, tinted bg (Colors ref). Mapping table maintained in one file (statusMap.ts).
+  SeverityTile 32×28 square, number or letter (C/H/M/L), filled/tinted/outline per severity (Vulnerabilities ref).
+  Tabs       underline tabs for page sections; segmented control for dataset/time switch (Logs ref).
+  Modal      shadow-4, radius-lg, 480/640 widths, header/body/footer, Esc closes (except destructive in progress).
+  ConfirmDialog  Specialised modal: target identity block (host, name, ID), consequence text, optional
+             "type the name to confirm" for irreversible actions.
+  SidePanel  Right sheet, 480px, shadow-3, header (title, status, close, copy link), scrollable sections,
+             sticky footer actions; URL-synced; focus trapped; Esc closes.
+  Tooltip    surface-elevated, shadow-2, 12px text, 400ms delay, max 280px.
+  CopyValue  mono text + copy icon on hover → "Copied" tooltip.
+  RelativeTime  "4 h ago" + absolute tooltip; turns warning when older than stale threshold.
+  Freshness  "Updated <time>" + Stale chip; used in page header and cards.
+  NavItem / NavGroup  as described in 4.1.
+  EmptyState icon (32, muted), title, explanation, optional action.
+  ErrorState danger icon, message, request id, retry.
+  Skeleton   surface-2 → surface-3 shimmer (disabled with reduced motion).
+  Spinner    16/20px ring, primary colour.
+  Toast      bottom-right, shadow-3, success/info/warning/danger, auto-dismiss 5s (errors persist).
+  ChartCard  Card + chart (Recharts) with consistent axis (text-muted 11px), grid (#1F1F2B), tooltip
+             (surface-elevated), legend, unit label, gaps for missing data.
+  Timeline   vertical list: time (mono, muted) · icon · text · link.
+  KeyValueGrid  2-column label/value grid used in all detail panels.
+
+=====================================================================================================
+DELIVERABLE 7 — FRONTEND PROJECT STRUCTURE
+=====================================================================================================
+
+7.1 Stack [DESIGN — minimal set, each justified]
+  Required by spec
+    react, react-dom, typescript
+  Tooling
+    vite (+ @vitejs/plugin-react)       fast build, outputs static files; simplest React+TS setup
+    eslint, prettier, vitest, @testing-library/react   quality + tests (dev only)
+  Runtime libraries
+    react-router                        routing (nested layouts, URL-synced panels/filters)
+    @tanstack/react-query               server-state cache, loading/error states, org-switch invalidation
+    @tanstack/react-table               headless tables (sorting, pagination, column visibility)
+    @tanstack/react-virtual             virtualised logs / device lists
+    @xyflow/react + elkjs               topology (lazy-loaded on /network only)
+    recharts                            charts (lazy-loaded per page)
+    lucide-react                        icon set (tree-shaken)
+    @radix-ui/react-* (dialog, dropdown-menu, popover, tooltip, tabs)   accessible primitives, unstyled
+  Styling: plain CSS with CSS custom properties (tokens.css) + CSS Modules per component.
+    No Tailwind / UI kit → fewer dependencies, tokens stay the single source of truth.
+  State: React Query for server data; URL search params for filters/selection/context; React context only for
+    session + current org; no Redux/Zustand needed.
+  Not added: moment/dayjs (use Intl.DateTimeFormat + Intl.RelativeTimeFormat), axios (use fetch wrapper).
+
+7.2 Where it lives and how it is served [DESIGN, see OPEN Q6]
+  - New folder `nekkoguard/frontend/` inside the Django repo (same git repo, separate build).
+  - Build inside Docker (node:22-alpine, ARM64) — no Node on the Pi host. Output → `frontend/dist`.
+  - Production: nginx/Traefik serves the SPA; `/api/*` and `/accounts/*` proxied to Django → same-origin,
+    session cookie + CSRF, no CORS needed.
+  - Development: Vite dev server container proxying `/api` to the django container.
+  - `frontend/node_modules` and `frontend/dist` added to .gitignore; node_modules kept in a Docker volume
+    (avoids SD-card churn on the host bind mount where possible).
+
+7.3 Folder structure
+
+  nekkoguard/frontend/
+  ├── index.html
+  ├── package.json, tsconfig.json, vite.config.ts, eslint.config.js
+  ├── public/fonts/ (Inter, JetBrains Mono woff2)
+  └── src/
+      ├── main.tsx                     bootstraps router + QueryClient + providers
+      ├── app/
+      │   ├── router.tsx               route tree (lazy pages)
+      │   ├── providers.tsx            QueryClientProvider, SessionProvider, ContextProvider
+      │   └── permissions.ts           role → capability map (UI only; backend enforces)
+      ├── styles/
+      │   ├── tokens.css               all design tokens (Deliverable 6)
+      │   ├── base.css                 reset, typography, fonts
+      │   └── utilities.css            a few layout helpers (stack, cluster, visually-hidden)
+      ├── components/                  SHARED, domain-agnostic
+      │   ├── Button/ Input/ Search/ Select/ FilterBar/ FilterChip/ Table/ Card/ KpiCard/
+      │   ├── Badge/ StatusPill/ SeverityTile/ Tabs/ SegmentedControl/ Modal/ ConfirmDialog/
+      │   ├── SidePanel/ Tooltip/ CopyValue/ RelativeTime/ Freshness/ KeyValueGrid/ Timeline/
+      │   └── EmptyState/ ErrorState/ Skeleton/ Spinner/ Toast/ ChartCard/
+      ├── layout/
+      │   ├── AppShell/ Sidebar/ TopBar/ ContextSelector/ GlobalSearch/ PageHeader/ EntranceLayout/
+      ├── features/                    one folder per module = feature-specific components + hooks
+      │   ├── auth/  overview/  network/  devices/  ports/  software/  vulnerabilities/
+      │   ├── certificates/  exposure/  pihole/  containers/  logs/  agents/  alerts/
+      │   ├── analytics/  settings/  account/
+      │   │   each contains: pages/ components/ hooks/ (useXxxQuery.ts) api.ts types.ts
+      │   └── network/topology/        TopologyCanvas, DeviceNode, GroupNode, RelationEdge,
+      │                                 layout.worker.ts (elkjs), toFlowGraph.ts (+ tests)
+      ├── api/
+      │   ├── client.ts                fetch wrapper: base URL, credentials, CSRF header, error normalisation
+      │   ├── queryKeys.ts             keys always include orgId → org isolation in cache
+      │   └── mocks/                   MOCK LAYER (dev only, see 7.4)
+      ├── hooks/                       useUrlState, useDebounce, useHotkey, useMediaQuery
+      ├── lib/                         format (ip, mac, bytes, dates), statusMap.ts, severity.ts
+      └── types/                       shared domain types (Organization, Client, Site, Network, Device,
+                                        Relation, PortService, SoftwarePackage, Finding, Certificate, Domain,
+                                        Exposure, PiholeStats, DockerHost, Container, LogEvent, Agent,
+                                        Alert, Role, Freshness, Unknown<T>)
+
+7.4 Mock data policy (because backend APIs do not exist)
+  - Mocks live ONLY in src/api/mocks/ and are served via MSW (Mock Service Worker) at the HTTP level, enabled
+    only when VITE_USE_MOCKS=true in development. Production builds exclude them.
+  - When mocks are active a persistent violet banner shows "Demo data — not connected to backend".
+  - Mock data uses placeholder addresses from documentation ranges, never real home-network values.
+  - Every mocked endpoint is listed in an "API contract needed" table that becomes the backend backlog.
+
+7.5 Type conventions
+  - `type Maybe<T> = T | null` for "unknown" values from backend; UI renders null as "Unknown" via a shared
+    <Value> component. Never coerce unknown to 0/false.
+  - Status unions as string literal types (e.g. `type DeviceStatus = 'online' | 'offline' | 'unknown'`) with
+    exhaustive mapping in statusMap.ts.
+
+=====================================================================================================
+DELIVERABLE 8 — IMPLEMENTATION ROADMAP
+=====================================================================================================
+
+  Phase 0 — Decisions (blocking)            Answer OPEN Q3, Q6 (auth API + hosting). Confirm Node-in-Docker build.
+  Phase 1 — Foundation                      Scaffold frontend/ (Vite+React+TS) in a Docker build; tokens.css,
+                                            base.css, fonts; api client; React Query; router; MSW mock layer.
+  Phase 2 — Design system                   All shared components in 6.5 + a simple /dev/components page
+                                            (dev-only) to review them visually.
+  Phase 3 — Shell + auth                    AppShell, Sidebar, TopBar, ContextSelector, GlobalSearch, PageHeader,
+                                            Login/MFA/reset/account pages against real allauth endpoints.
+  Phase 4 — Network Discovery & Topology    Highest product priority: list view, topology canvas, nodes/edges,
+                                            panel, discovery runs, history.
+  Phase 5 — Core inventory                  Devices (list + detail with tabs), Ports & Services, Software.
+  Phase 6 — Security                        Vulnerabilities, Certificates, Email & Domain Exposure, Alerts.
+  Phase 7 — Operations                      Containers, Logs, Agents, Pi-hole.
+  Phase 8 — Overview + Analytics            Built last because they aggregate all other modules.
+  Phase 9 — Settings                        Organization + Platform settings.
+  Phase 10 — Validation                     Responsive pass (1024/768), keyboard + a11y, empty/error states,
+                                            spec-vs-UI checklist (Deliverable 10), bundle size check.
+
+  Dependency notes
+  - Each feature phase needs the matching backend models + API. Frontend can proceed on mocks, but a page is
+    only "done" when wired to the real API.
+  - Backend work is OUT of scope for this frontend spec but is the critical path: Organization/Client/Site/
+    Network models and permission scoping must exist before ANY real data page.
+
+=====================================================================================================
+DELIVERABLE 9 — OPEN QUESTIONS AND ASSUMPTIONS
+=====================================================================================================
+
+  Q1  [SPEC 6.2/6.11] requires following THREE topology reference images. Only one (Assets.jfif) exists in
+      Specifications/. Where are the other two? Until then Assets.jfif is the sole reference.
+  Q2  Which relationship types will the backend provide (ARP neighbour, gateway, agent-reported, LLDP,
+      Docker network…)? Are they directional? Edge rendering depends on it.
+  Q3  Authentication API for a React SPA: enable allauth "headless" (allauth already installed with MFA) or
+      build custom DRF endpoints? Recommendation: allauth headless in "browser" mode (session cookies).
+  Q4  Are roles fixed (the 6 in SPEC 2.3) or can organizations create custom roles/permissions?
+  Q5  Will there be live updates (WebSocket — asgi/websocket.py exists) for discovery progress, logs, alerts?
+      Or polling only? Affects "Live" toggles.
+  Q6  Hosting: SPA served by nginx/Traefik with Django behind /api (recommended) or via Django templates?
+  Q7  Assets reference shows Risk Score/Threat Level. Not in the spec → excluded. Should a risk score be added
+      to the product spec?
+  Q8  Email & Domain Exposure: which detection source(s), domain verification method (DNS TXT?), and the exact
+      exposure status values?
+  Q9  "Analytics & Reports": is there a report export (PDF/CSV)? Spec defines analytics only.
+  Q10 Alert muting: per category only, with duration? Who can mute?
+  Q11 Is a light theme required? Assumed dark-only for v1.
+  Q12 Stale thresholds per module (devices, agents, Pi-hole, containers, certificates) — set by backend or
+      fixed in UI? Assumed backend returns `stale: boolean` + `last_updated`.
+  Q13 Product name: spec says "NeekoGuard", repository/code say "NekkoGuard". Which is correct for the UI?
+  Q14 Languages: Django has en_US, fr_FR, pt_BR locales. Does the frontend need i18n in v1?
+      Assumed English only, strings kept in one place for later i18n.
+  Q15 Pagination: server-side for all lists (assumed) — confirm page-size limits.
+
+  Assumptions taken
+  - Dark theme only; desktop-first; React+TS+Vite; build in Docker; SPA same-origin with Django.
+  - Backend returns null for unknown values and provides timestamps for freshness.
+  - Global context (org/client/site/network) is passed to every API call as query parameters.
+
+=====================================================================================================
+DELIVERABLE 10 — IMPLEMENTATION STATUS
+=====================================================================================================
+
+Honest status at the time of writing: NO frontend code has been implemented in this run.
+
+Why
+  1. No React/TypeScript frontend exists yet and Node.js is not installed on the Raspberry Pi. Building it
+     requires adding a Node build container (a change to the Docker setup) — this needs owner confirmation
+     per project rules (Docker-first, explain before changing).
+  2. The backend currently exposes only the users API. Every module page would run 100% on mock data;
+     the hosting/auth decisions (Q3, Q6) determine how the foundation is wired.
+  3. Q1 (two missing topology reference images) directly affects the most important page.
+
+What IS delivered
+  - Complete page inventory, per-page specification, topology specification, design tokens, component
+    catalogue, project structure, roadmap and open questions (this document).
+
+Page-by-page checklist (structure / visual / components / nav / interactions / responsive / loading /
+empty / error / limitations documented)
+
+  Page                              Specified   Implemented   Blocked by
+  --------------------------------  ---------   -----------   ------------------------------------------
+  App shell, sidebar, top bar       Yes         No            Phase 1 setup approval
+  Context selector (org/client/…)   Yes         No            Org/Client/Site/Network models + API
+  Global search                     Yes         No            Search API
+  Login / MFA / reset / account     Yes         No            Q3 (allauth headless vs custom)
+  Overview                          Yes         No            All module APIs
+  Network Discovery & Topology      Yes         No            Device/relation/discovery APIs, Q1, Q2
+  Devices (list + detail)           Yes         No            Device API
+  Ports & Services                  Yes         No            Port/service API
+  Software Inventory                Yes         No            Software API
+  Vulnerabilities                   Yes         No            Findings API
+  Certificates                      Yes         No            Certificate API
+  Email & Domain Exposure           Yes         No            Domain/exposure API, Q8
+  Pi-hole                           Yes         No            Pi-hole integration API
+  Containers (list + detail)        Yes         No            Docker host/container API
+  Logs                              Yes         No            Log API, Q5
+  Agents                            Yes         No            Agent API
+  Alerts                            Yes         No            Alert API, Q10
+  Analytics & Reports               Yes         No            History/analytics API, Q9
+  Settings (org + platform)         Yes         No            Settings APIs, Q4
+  Error pages (403/404/500)         Yes         No            Phase 1
+
+Recommended next step
+  Approve Phase 0/1: create `nekkoguard/frontend/` (Vite + React + TS) built inside a Node ARM64 container,
+  add the design tokens and app shell with the mock layer, then build Network Discovery & Topology first.
+
+END OF DOCUMENT

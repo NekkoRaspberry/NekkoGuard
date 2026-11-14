@@ -5,9 +5,36 @@ Nekko Guard will keep guarding
 [![Built with Cookiecutter Django](https://img.shields.io/badge/built%20with-Cookiecutter%20Django-ff69b4.svg?logo=cookiecutter)](https://github.com/cookiecutter/cookiecutter-django/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-## Settings
+## Environments
 
-Moved to [settings](https://cookiecutter-django.readthedocs.io/en/latest/1-getting-started/settings.html).
+| Compose file | Postgres / Mailpit | Env files (git-ignored) | Used by |
+|---|---|---|---|
+| `docker-compose.local.yml` | Shared services in k3s | `.envs/.local/` | Daily use on NekkoRaspberry (`just`, devcontainer) |
+| `docker-compose.development.yml` | Own containers | `.envs/.development/` | CI, any other machine |
+| `docker-compose.production.yml` | Own containers | `.envs/.production/` | Production |
+
+```bash
+docker compose -f docker-compose.local.yml up -d
+```
+
+Open: http://nekkoguard.home.arpa:8000 (name served by Pi-hole on the home network).
+
+### Hostnames
+
+Django only answers to the names in `DJANGO_ALLOWED_HOSTS` (comma-separated) in `.envs/<env>/.django`.
+No hostnames or IP addresses are hardcoded in the settings.
+
+| Environment | `DJANGO_ALLOWED_HOSTS` |
+|---|---|
+| local / development | `nekkoguard.home.arpa,localhost,127.0.0.1` |
+| production | `.nekkoguard.com,nekkoguard.home.arpa` |
+
+To add a name: edit the env file, then `docker compose -f <file> up -d` (recreates the containers).
+The home name `nekkoguard.home.arpa` is defined in Pi-hole (`Pihole-K3s/pihole.yaml`, `FTLCONF_dns_hosts`).
+
+### Settings reference
+
+See the [cookiecutter-django settings](https://cookiecutter-django.readthedocs.io/en/latest/1-getting-started/settings.html).
 
 ## Basic Commands
 
