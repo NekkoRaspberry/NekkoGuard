@@ -1,0 +1,30 @@
+.root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  animation: fadeIn 400ms var(--ease-out) 150ms both;
+}
+
+.card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}

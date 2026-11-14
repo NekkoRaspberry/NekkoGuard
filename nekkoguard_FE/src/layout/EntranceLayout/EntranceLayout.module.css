@@ -1,0 +1,106 @@
+.root {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-10) var(--space-4);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/*
+ * Admin sign-in (opened from the Django admin): teal green-blue instead of violet,
+ * close to Django admin's palette but greener. Redefining the tokens recolours
+ * buttons, focus rings, links and the logo inside this layout only.
+ */
+.admin {
+  --primary: #26a69a;
+  --primary-hover: #3cc4b6;
+  --primary-pressed: #1f8c82;
+  --primary-subtle: rgba(38, 166, 154, 0.14);
+  --focus-ring: 0 0 0 2px #0b0b12, 0 0 0 4px #26a69a;
+  --entrance-glow: rgba(38, 166, 154, 0.18);
+}
+
+/* Slightly larger glow for the admin sign-in (default: 900×600). */
+.admin .glow {
+  width: 1100px;
+  height: 740px;
+}
+
+.glow {
+  position: absolute;
+  top: -20%;
+  left: 50%;
+  width: 900px;
+  height: 600px;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, var(--entrance-glow, rgba(124, 108, 246, 0.16)), transparent);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Faint dot grid — echoes the topology canvas of the console */
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(#1e1e28 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 40%, #000 30%, transparent 100%);
+  z-index: -2;
+  pointer-events: none;
+}
+
+.container {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-6);
+  animation: rise 320ms var(--ease-out);
+}
+
+.logo {
+  display: flex;
+  justify-content: center;
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  padding: var(--space-8);
+}
+
+.footer {
+  text-align: center;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: var(--space-6) var(--space-5);
+  }
+}
+
+.version {
+  position: absolute;
+  bottom: var(--space-4);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-disabled);
+}

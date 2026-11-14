@@ -1,0 +1,88 @@
+/* These styles are generated from project.scss. */
+
+.alert-debug {
+  color: black;
+  background-color: white;
+  border-color: #d6e9c6;
+}
+
+.alert-error {
+  color: #b94a48;
+  background-color: #f2dede;
+  border-color: #eed3d7;
+}
+
+/* Dark theme — same palette as the React frontend (nekkoguard_FE/src/styles/tokens.css). */
+.ng-dark {
+  background-color: #0b0b12;
+  color: #ececf3;
+  color-scheme: dark;
+}
+
+.ng-dark .ng-navbar {
+  background-color: #0e0e17;
+  border-bottom: 1px solid #1f1f2b;
+}
+
+.ng-dark .ng-navbar .navbar-brand {
+  color: #ececf3;
+  font-weight: 600;
+}
+
+.ng-dark .ng-navbar .nav-link {
+  color: #a3a3b5;
+}
+
+.ng-dark .ng-navbar .nav-link:hover,
+.ng-dark .ng-navbar .nav-item.active .nav-link {
+  color: #ececf3;
+}
+
+.ng-dark dt {
+  color: #a3a3b5;
+  font-weight: 500;
+}
+
+.ng-dark a:not(.btn) {
+  color: #8e80ff;
+}
+
+/* Release number, centred in the navbar */
+.ng-dark .ng-navbar .container-fluid {
+  position: relative;
+}
+
+.ng-version {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+  color: #a3a3b5;
+  pointer-events: none;
+}
+
+/* Compact label/value list: label column only as wide as the longest label. */
+.ng-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.375rem 1.5rem;
+}
+
+.ng-details dd {
+  margin: 0;
+}
+
+/* OAuth consent page (templates/oauth2_provider/authorize.html) */
+.ng-consent {
+  max-width: 560px;
+}
+
+.ng-muted {
+  color: #a3a3b5;
+  font-size: 0.9rem;
+}
+
+.ng-scopes {
+  padding-left: 1.25rem;
+}

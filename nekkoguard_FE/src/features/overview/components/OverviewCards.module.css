@@ -1,0 +1,184 @@
+/* Welcome */
+.welcome {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  padding: var(--space-6);
+}
+
+.welcomeMain {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.welcomeText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.welcomeTitle {
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  overflow-wrap: anywhere;
+}
+
+.welcomeSubtitle {
+  color: var(--text-secondary);
+  font-size: var(--fs-small);
+}
+
+.email {
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.welcomeActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Card header link */
+.headerLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  padding-top: 6px;
+}
+
+/* Connection status */
+.statusList {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.statusRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+}
+
+.statusRow + .statusRow {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.statusRow:first-child {
+  padding-top: 0;
+}
+
+.statusRow:last-child {
+  padding-bottom: 0;
+}
+
+.statusIcon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+
+.statusText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.statusTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.statusTitle {
+  font-weight: 500;
+}
+
+.statusDescription {
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+  color: var(--text-muted);
+}
+
+.statusMetrics {
+  display: flex;
+  gap: var(--space-6);
+  margin: 0;
+}
+
+.statusMetrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 84px;
+}
+
+.statusMetrics dt {
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.statusMetrics dd {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-primary);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.unknown {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Skeletons */
+.skeletonGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-5);
+}
+
+.skeletonItem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .welcome {
+    padding: var(--space-5);
+  }
+
+  .statusRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .statusMetrics {
+    grid-column: 2;
+    gap: var(--space-5);
+  }
+}

@@ -18,9 +18,9 @@ updates:
   - package-ecosystem: 'docker'
     # Look for a `Dockerfile` in the `compose/development/django` directory
     directories:
-      - 'compose/development/django/'
-      - 'compose/development/docs/'
-      - 'compose/production/django/'
+      - '/nekkoguard_BE/compose/development/django/'
+      - '/nekkoguard_BE/compose/development/docs/'
+      - '/nekkoguard_BE/compose/production/django/'
     # Every weekday
     schedule:
       interval: 'daily'
@@ -39,11 +39,11 @@ updates:
   - package-ecosystem: 'docker'
     # Look for a `Dockerfile` in the listed directories
     directories:
-      - 'compose/development/node/'
-      - 'compose/production/aws/'
-      - 'compose/production/postgres/'
-      - 'compose/production/traefik/'
-      - 'compose/production/nginx/'
+      - '/nekkoguard_BE/compose/development/node/'
+      - '/nekkoguard_BE/compose/production/aws/'
+      - '/nekkoguard_BE/compose/production/postgres/'
+      - '/nekkoguard_BE/compose/production/traefik/'
+      - '/nekkoguard_BE/compose/production/nginx/'
     # Every weekday
     schedule:
       interval: 'daily'
@@ -51,20 +51,32 @@ updates:
   # Enable version updates for Docker Compose files
   - package-ecosystem: 'docker-compose'
     directories:
-      - '/'
+      - '/nekkoguard_BE'
+      - '/nekkoguard_FE'
     # Every weekday
     schedule:
       interval: 'daily'
 
   # Enable version updates for Python/uv
   - package-ecosystem: 'uv'
-    # Look for a `pyproject.toml` in the `root` directory
-    directory: '/'
+    # Look for a `pyproject.toml` in the backend directory
+    directory: '/nekkoguard_BE'
     # Every weekday
     schedule:
       interval: 'daily'
     groups:
       python:
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  # Frontend npm dependencies
+  - package-ecosystem: 'npm'
+    directory: '/nekkoguard_FE'
+    schedule:
+      interval: 'weekly'
+    groups:
+      npm:
         update-types:
           - 'minor'
           - 'patch'
