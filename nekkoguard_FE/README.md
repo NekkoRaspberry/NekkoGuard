@@ -1,4 +1,6 @@
-# NekkoGuard-FE
+# NekkoGuard — Frontend
+
+Part of the NekkoGuard monorepo (`nekkoguard_FE/`; the backend is in `../nekkoguard_BE/`).
 
 Web frontend for **NekkoGuard** — React 19 + TypeScript + Vite, served by an unprivileged
 nginx container that also reverse-proxies the Django backend (same origin, no CORS).
