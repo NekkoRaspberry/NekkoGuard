@@ -69,4 +69,5 @@ def test_signup_api_accepts_known_domain(client):
 )
 def test_provider_signup_checks_domain(rf, email, is_open):
     sociallogin = SimpleNamespace(user=SimpleNamespace(email=email))
-    assert SocialAccountAdapter().is_open_for_signup(rf.get("/"), sociallogin) is is_open
+    adapter = SocialAccountAdapter()
+    assert adapter.is_open_for_signup(rf.get("/"), sociallogin) is is_open

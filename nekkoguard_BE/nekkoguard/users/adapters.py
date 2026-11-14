@@ -33,7 +33,10 @@ class AccountAdapter(DefaultAccountAdapter):
         email = super().clean_email(email)
         if not is_allowed_email_domain(email):
             raise ValidationError(
-                _("Please use an address from a well-known email provider, such as Gmail or Outlook."),
+                _(
+                    "Please use an address from a well-known email provider, "
+                    "such as Gmail or Outlook."
+                ),
                 code="email_domain_not_allowed",
             )
         return email
