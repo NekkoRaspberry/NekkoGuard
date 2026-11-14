@@ -1,4 +1,6 @@
-exclude: '^docs/|/migrations/|devcontainer.json'
+# Monorepo: these hooks cover the backend only (the frontend uses ESLint + tsc).
+files: '^nekkoguard_BE/'
+exclude: '^nekkoguard_BE/docs/|/migrations/|devcontainer.json'
 default_stages: [pre-commit]
 minimum_pre_commit_version: "3.2.0"
 

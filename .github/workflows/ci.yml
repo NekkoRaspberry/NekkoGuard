@@ -3,11 +3,11 @@ name: CI
 on:
   pull_request:
     branches: ['main']
-    paths-ignore: ['docs/**']
+    paths-ignore: ['nekkoguard_BE/docs/**', 'nekkoguard_FE/**', 'nekkoguard_specifications/**']
 
   push:
     branches: ['main']
-    paths-ignore: ['docs/**']
+    paths-ignore: ['nekkoguard_BE/docs/**', 'nekkoguard_FE/**', 'nekkoguard_specifications/**']
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
@@ -23,13 +23,16 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: '.python-version'
+          python-version-file: 'nekkoguard_BE/.python-version'
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
 
   # With no caching at all the entire ci process takes 3m to complete!
   pytest:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nekkoguard_BE
 
     steps:
       - name: Checkout Code Repository
@@ -65,9 +68,10 @@ jobs:
       - name: Build and cache local backend
         uses: docker/bake-action@v6
         with:
+          source: .
           push: false
           load: true
-          files: docker-compose.development.yml
+          files: nekkoguard_BE/docker-compose.development.yml
           targets: django
           set: |
             django.cache-from=type=gha,scope=django-cached-tests
@@ -78,9 +82,10 @@ jobs:
       - name: Build and cache docs
         uses: docker/bake-action@v6
         with:
+          source: .
           push: false
           load: true
-          files: docker-compose.docs.yml
+          files: nekkoguard_BE/docker-compose.docs.yml
           set: |
             docs.cache-from=type=gha,scope=cached-docs
             docs.cache-to=type=gha,scope=cached-docs,mode=max
