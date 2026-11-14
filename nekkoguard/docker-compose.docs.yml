@@ -1,12 +1,12 @@
 services:
   docs:
-    image: nekkoguard_local_docs
-    container_name: nekkoguard_local_docs
+    image: nekkoguard_development_docs
+    container_name: nekkoguard_development_docs
     build:
       context: .
-      dockerfile: ./compose/local/docs/Dockerfile
+      dockerfile: ./compose/development/docs/Dockerfile
     env_file:
-      - path: ./.envs/.local/.django
+      - path: ./.envs/.development/.django
         required: false
     volumes:
       - ./docs:/docs:z

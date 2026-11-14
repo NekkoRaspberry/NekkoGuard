@@ -1,0 +1,1298 @@
+# NEEKOGUARD
+# PRODUCT & FUNCTIONAL SPECIFICATION
+
+**Document version:** 1.1  
+**Product:** NeekoGuard  
+**Document type:** Product Requirements & Functional Specification  
+**Status:** Updated specification
+
+---
+
+# 1. PRODUCT OVERVIEW
+
+## 1.1 What is NeekoGuard?
+
+NeekoGuard is a self-hosted infrastructure monitoring, network visibility, and security management platform.
+
+Its purpose is to provide a centralized interface where organizations can monitor, understand, and manage their IT infrastructure, local networks, connected devices, services, software, containers, and security exposure.
+
+The initial deployment is intended for a private/home organization using a Raspberry Pi and a local network. However, the platform must be designed to support multiple organizations and multiple clients within each organization.
+
+NeekoGuard combines network discovery, infrastructure inventory, security analysis, monitoring, and operational management into one platform.
+
+The platform should allow users to answer questions such as:
+
+- What devices are connected to my network?
+- Which devices are currently online?
+- What services and ports are exposed?
+- What software is installed on each device?
+- Which devices have known vulnerabilities?
+- Which certificates are expiring?
+- Which containers are running?
+- What is happening in my DNS network?
+- Have new or unknown devices appeared?
+- Has something changed in my infrastructure?
+- Are my monitoring agents working correctly?
+
+## 1.2 Main product objectives
+
+NeekoGuard must provide:
+
+- Network discovery and visual network topology.
+- Centralized device and infrastructure inventory.
+- Port and service monitoring.
+- Software and package inventory.
+- Vulnerability identification and tracking.
+- SSL/TLS certificate monitoring.
+- Email and domain exposure monitoring.
+- Pi-hole analytics.
+- Docker and container management.
+- Infrastructure and security event monitoring.
+- Agent and collector management.
+- Notifications and alerts.
+- Historical information and analytics.
+- Multi-organization and multi-client management.
+
+The platform should prioritize visibility, security, usability, and clear presentation of technical information.
+
+---
+
+# 2. PLATFORM STRUCTURE AND MULTI-TENANCY
+
+## 2.1 Organizational hierarchy
+
+NeekoGuard must support multiple organizations.
+
+Each organization may manage multiple clients, sites, networks, and devices.
+
+The logical hierarchy is:
+
+Platform  
+└── Organization  
+&nbsp;&nbsp;&nbsp;&nbsp;└── Client  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── Site  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── Network  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── Devices
+
+### Organization
+
+An organization represents a tenant using NeekoGuard.
+
+It owns its users, clients, sites, networks, devices, monitoring configuration, integrations, and security findings.
+
+### Client
+
+A client represents a customer, business unit, household, or managed environment belonging to an organization.
+
+An organization can have multiple clients.
+
+### Site
+
+A site represents a physical or logical location belonging to a client.
+
+Examples include:
+
+- Home network.
+- Office.
+- Data center.
+- Remote location.
+- Branch office.
+
+### Network
+
+A site may contain multiple networks or subnets.
+
+Each network must have its own discovery configuration and associated devices.
+
+## 2.2 Multiple organizations
+
+Users may belong to multiple organizations.
+
+The application must provide an organization selector that allows users to switch between organizations they are authorized to access.
+
+When switching organizations, all relevant data and pages must reflect the selected organization.
+
+Organization data must remain completely isolated.
+
+## 2.3 User roles
+
+The platform should support these roles:
+
+**Platform Administrator**
+- Manages the platform.
+- Creates and manages organizations.
+- Has platform-level configuration permissions.
+
+**Organization Owner**
+- Manages an organization.
+- Manages organization users and clients.
+- Controls organization settings.
+
+**Organization Administrator**
+- Manages organization resources.
+- Manages users and permissions.
+- Configures monitoring and integrations.
+
+**Security Analyst**
+- Reviews devices, vulnerabilities, exposed services, certificates, and alerts.
+
+**Operator**
+- Performs authorized operational actions, including permitted container operations.
+
+**Viewer**
+- Has read-only access to authorized information.
+
+Permissions must always be validated by the backend.
+
+---
+
+# 3. AUTHENTICATION AND ACCOUNT SECURITY
+
+NeekoGuard must provide secure user authentication.
+
+Required functionality:
+
+- Login using email and password.
+- Multi-factor authentication (MFA).
+- TOTP authenticator application support.
+- Recovery codes.
+- Password reset.
+- Session management.
+- Logout.
+- Protection against repeated login attempts.
+- User profile management.
+
+MFA must be available to users and should be required according to the platform's security policy.
+
+The interface must clearly communicate whether MFA is enabled and provide an understandable enrollment and recovery experience.
+
+Recovery codes must be treated as sensitive information and must not be exposed again after their initial issuance.
+
+---
+
+# 4. MAIN APPLICATION NAVIGATION
+
+## 4.1 General layout
+
+The frontend should look and feel like a professional infrastructure and security operations platform.
+
+The interface should prioritize:
+
+- Clear navigation.
+- Good information hierarchy.
+- Compact but readable data presentation.
+- Consistent page layouts.
+- Technical information that is easy to understand.
+- Clear status indicators.
+- Fast access to related information.
+- Minimal unnecessary decoration.
+
+The application should not use large decorative images or generic illustrations that do not contribute to the product's functionality.
+
+## 4.2 Main navigation
+
+The main navigation should contain the following sections:
+
+1. Overview
+2. Network Discovery & Topology
+3. Devices
+4. Ports & Services
+5. Software Inventory
+6. Vulnerabilities
+7. Certificates
+8. Email & Domain Exposure
+9. Pi-hole
+10. Containers
+11. Logs
+12. Agents
+13. Alerts
+14. Analytics & Reports
+15. Settings
+
+Navigation must clearly indicate the currently selected section.
+
+Related sections may be visually grouped, but every module must remain easy to find.
+
+## 4.3 Global application context
+
+The application must always make the current organizational context clear.
+
+Users should be able to identify:
+
+- Current organization.
+- Current client, when selected.
+- Current site, when selected.
+- Current network, when relevant.
+
+Changing context must update the information displayed across the application.
+
+## 4.4 Global search
+
+A global search feature should allow users to search their authorized data.
+
+Searchable information should include:
+
+- Hostnames.
+- IP addresses.
+- MAC addresses.
+- Devices.
+- Services.
+- Ports.
+- Software packages.
+- Vulnerabilities.
+- Certificates.
+- Containers.
+- Relevant events.
+
+Search results must respect organization and user permissions.
+
+---
+
+# 5. OVERVIEW DASHBOARD
+
+## 5.1 Purpose
+
+The Overview page provides a summary of the current infrastructure and its security status.
+
+It should allow users to understand the state of their environment without navigating through every module.
+
+## 5.2 Dashboard information
+
+The dashboard should display:
+
+**Infrastructure**
+- Total discovered devices.
+- Online devices.
+- Offline devices.
+- Monitored networks.
+- Active agents.
+- Unavailable agents.
+
+**Security**
+- Open vulnerabilities.
+- Critical and high-severity vulnerabilities.
+- Newly discovered devices.
+- Newly exposed ports.
+- Expiring certificates.
+- Recent security alerts.
+
+**Services**
+- Detected open ports.
+- Important service changes.
+- Docker host status.
+- Running and stopped containers.
+
+**Network activity**
+- Pi-hole DNS requests.
+- Blocked DNS requests.
+- Network activity trends.
+
+**Recent activity**
+- Newly discovered devices.
+- Device status changes.
+- New vulnerabilities.
+- Certificate changes.
+- Agent connection changes.
+- Container events.
+
+Dashboard elements should link to their corresponding detailed pages.
+
+The dashboard must distinguish between healthy, warning, critical, unavailable, and unknown states.
+
+Missing information must never automatically be interpreted as healthy.
+
+---
+
+# 6. NETWORK DISCOVERY & TOPOLOGY
+
+## 6.1 Purpose
+
+Network Discovery & Topology is one of the most important features of NeekoGuard.
+
+It provides a visual representation of the monitored network and allows users to understand which devices exist, their status, their network location, and their known relationships.
+
+The feature must combine:
+
+1. A graphical network topology.
+2. A structured device list.
+3. Device details.
+4. Discovery controls.
+5. Network filtering.
+6. Discovery history.
+
+## 6.2 Mandatory visual references: Images 1, 2 and 3
+
+The three Network Discovery & Topology reference images previously supplied by the product owner are the mandatory visual references for this page.
+
+They must guide the final frontend design.
+
+The intended result is not a generic network diagram. The actual layout, visual hierarchy, colors, spacing, node presentation, controls, and panel arrangement must follow the three supplied images.
+
+The reference images take priority over generic design assumptions.
+
+The required functionality in this section must be integrated into that visual direction.
+
+**Important:** The original image files are not embedded in this text document. Their exact visual details must therefore be taken directly from the original images when they are available to the design team. No unrelated images should be substituted for them.
+
+## 6.3 Topology view
+
+The topology view must provide a large graphical workspace showing discovered network devices.
+
+Devices must be represented as nodes.
+
+Known relationships between devices must be represented as connecting lines or edges.
+
+The topology must support:
+
+- Zoom in.
+- Zoom out.
+- Pan.
+- Fit the complete network into the visible area.
+- Select individual devices.
+- Search for devices.
+- Filter devices.
+- Group devices logically.
+- Display device status.
+- Display device labels.
+- Refresh the displayed information.
+
+The topology should remain understandable when many devices are present.
+
+Device labels must remain readable, and the graph should avoid unnecessary overlap.
+
+## 6.4 Device representation
+
+Each device node should communicate its identity and relevant status.
+
+Where available, device information should include:
+
+- Hostname.
+- IP address.
+- MAC address.
+- Manufacturer/vendor.
+- Device category.
+- Operating system.
+- Online/offline status.
+
+Different device categories should be recognizable.
+
+Examples include:
+
+- Router.
+- Switch.
+- Server.
+- Workstation.
+- Laptop.
+- Mobile device.
+- Raspberry Pi.
+- IoT device.
+- Printer.
+- Unknown device.
+
+The application must not invent a device category when the available information is insufficient.
+
+## 6.5 Device selection
+
+When a user selects a device, the interface must show its relevant information.
+
+This may be displayed in a contextual information panel or a dedicated detail view, following the visual arrangement of the supplied references.
+
+The information should include:
+
+- Device identity.
+- Current status.
+- IP and MAC addresses.
+- Network and subnet.
+- Vendor and device type.
+- First discovery.
+- Last seen.
+- Detected services.
+- Open ports.
+- Installed software, when available.
+- Vulnerabilities, when available.
+- Certificates, when associated.
+- Historical changes.
+
+The user must be able to navigate from the selected device to its full device detail page.
+
+## 6.6 Network filtering
+
+Users must be able to filter the topology by:
+
+- Organization.
+- Client.
+- Site.
+- Network.
+- Subnet.
+- Device type.
+- Online/offline status.
+- Device name.
+- IP address.
+- MAC address.
+
+Filters must be visible and understandable.
+
+Users must be able to clear filters and return to the complete network view.
+
+## 6.7 Topology and list views
+
+The page must provide both graphical and structured representations.
+
+**Topology view**
+
+Used to understand the network visually and inspect relationships.
+
+**List view**
+
+Used to search, sort, filter, and review device information in a structured format.
+
+Both views must represent the same underlying device inventory.
+
+Switching views should preserve the current network scope and relevant filters whenever possible.
+
+## 6.8 Discovery process
+
+The system must allow authorized users to configure and initiate network discovery.
+
+Users should be able to define:
+
+- Network or subnet.
+- Discovery scope.
+- Associated site.
+- Associated client.
+- Discovery settings permitted by their role.
+
+Discovery must only target explicitly authorized networks.
+
+The interface must show:
+
+- Discovery status.
+- Start time.
+- Completion time.
+- Devices discovered.
+- Discovery errors.
+- Last successful discovery.
+
+## 6.9 Device history
+
+NeekoGuard must retain discovery history.
+
+It should record:
+
+- New devices.
+- Devices no longer detected.
+- Online/offline transitions.
+- IP address changes.
+- Hostname changes.
+- Vendor or device information changes.
+- Newly detected services.
+- Changes to previously observed services.
+
+This history must be accessible from the device and relevant network views.
+
+## 6.10 Relationship accuracy
+
+The topology must distinguish observed relationships from inferred relationships.
+
+For example, devices sharing the same subnet must not automatically be represented as physically connected to each other.
+
+The application must not claim to know physical switch ports, cables, or network paths unless that information is actually available.
+
+## 6.11 Visual requirements
+
+The topology page must follow the three original reference images.
+
+The page must preserve a clear hierarchy between:
+
+- The main topology workspace.
+- Network and discovery controls.
+- Filters.
+- Selected-device information.
+- Discovery status.
+
+Status colors should be consistent and meaningful.
+
+The topology must be the main working area, not merely a decorative element above a device table.
+
+The page should feel like a dedicated network operations interface.
+
+---
+
+# 7. DEVICE MANAGEMENT
+
+## 7.1 Purpose
+
+The Devices section provides the complete inventory of known infrastructure assets.
+
+It must provide a structured way to manage and inspect discovered devices.
+
+## 7.2 Device inventory
+
+The device list should include:
+
+- Device name.
+- IP address.
+- MAC address.
+- Device type.
+- Manufacturer.
+- Associated client.
+- Site.
+- Network.
+- Current status.
+- Last seen.
+
+Users must be able to search, filter, sort, and open individual devices.
+
+## 7.3 Device details
+
+Each device should have a dedicated detail page.
+
+The detail page should organize information into sections such as:
+
+- Overview.
+- Network.
+- Ports & Services.
+- Software.
+- Vulnerabilities.
+- Certificates.
+- Containers.
+- Logs & Events.
+- History.
+
+## 7.4 Device organization
+
+Authorized users should be able to:
+
+- Add descriptive labels.
+- Add notes.
+- Assign devices to groups.
+- Mark devices as managed.
+- Mark devices as ignored.
+- Mark devices for investigation.
+
+Manually entered information must be distinguishable from automatically discovered information.
+
+---
+
+# 8. PORT & SERVICE INTELLIGENCE
+
+## 8.1 Purpose
+
+This module provides visibility into exposed network ports and detected services.
+
+It should help users understand which services are available on each monitored device.
+
+## 8.2 Information displayed
+
+Each result should include:
+
+- Device.
+- IP address.
+- Port number.
+- Protocol.
+- Detected service.
+- Service version, when reliably identified.
+- Detection timestamp.
+- Current or historical status.
+
+## 8.3 Functionality
+
+Users must be able to:
+
+- View all detected ports.
+- Filter by device.
+- Filter by network.
+- Filter by port.
+- Filter by protocol.
+- Filter by service.
+- Identify newly opened ports.
+- Identify services that are no longer available.
+- View service changes over time.
+
+The interface must distinguish confirmed detection from uncertain service identification.
+
+All scanning must be restricted to authorized network scopes.
+
+---
+
+# 9. SOFTWARE & PACKAGE INVENTORY
+
+## 9.1 Purpose
+
+Software Inventory provides visibility into installed software across monitored devices.
+
+## 9.2 Information displayed
+
+Where available, each software entry should include:
+
+- Device.
+- Operating system.
+- Software/package name.
+- Installed version.
+- Package manager or source.
+- Last inventory update.
+- Update status, where known.
+
+## 9.3 Functionality
+
+Users must be able to:
+
+- Browse software across all authorized devices.
+- Search for a package.
+- Identify devices running a particular package.
+- Compare installed versions.
+- View package changes over time.
+- Identify outdated software when reliable information is available.
+
+Software inventory and vulnerability findings must remain separate concepts.
+
+A package being outdated does not automatically mean it is vulnerable.
+
+---
+
+# 10. VULNERABILITY MANAGEMENT
+
+## 10.1 Purpose
+
+The Vulnerability Management section centralizes identified security vulnerabilities.
+
+Findings should be associated with the affected device, software package, or service.
+
+## 10.2 Information displayed
+
+Each finding should contain:
+
+- Vulnerability identifier, such as CVE.
+- Affected device.
+- Affected software or service.
+- Detected version.
+- Severity.
+- CVSS information, when available.
+- Known-exploited status, when supported by a trusted source.
+- Detection source.
+- Supporting evidence.
+- First detected date.
+- Last observed date.
+- Recommended remediation.
+- Current finding status.
+
+## 10.3 Finding status
+
+The platform should support:
+
+- Open.
+- Acknowledged.
+- Resolved.
+- False Positive.
+
+Status changes must be recorded in the history.
+
+## 10.4 Filtering
+
+Users must be able to filter by:
+
+- Severity.
+- Vulnerability identifier.
+- Device.
+- Software.
+- Status.
+- Detection date.
+- Organization/client/site.
+
+The interface should make critical findings easy to identify without making every finding appear equally urgent.
+
+Potential matches must be distinguished from confirmed findings.
+
+---
+
+# 11. CERTIFICATE INTELLIGENCE
+
+## 11.1 Purpose
+
+Certificate Intelligence provides a centralized inventory of certificates discovered across monitored services and endpoints.
+
+## 11.2 Information displayed
+
+Where available:
+
+- Certificate subject.
+- Common name.
+- Issuer.
+- Subject Alternative Names.
+- Valid-from date.
+- Expiration date.
+- Remaining validity.
+- Fingerprint.
+- Certificate chain.
+- Associated device.
+- IP address.
+- Port.
+- Service.
+- Last observed date.
+
+## 11.3 Certificate status
+
+The platform should identify:
+
+- Valid certificates.
+- Certificates nearing expiration.
+- Expired certificates.
+- Self-signed certificates.
+- Invalid or untrusted certificates.
+- Certificates that have changed since the previous observation.
+
+Users must be able to search and filter certificates.
+
+A certificate may be associated with multiple endpoints. The platform must preserve these associations.
+
+---
+
+# 12. EMAIL & DOMAIN EXPOSURE
+
+## 12.1 Purpose
+
+This module provides visibility into publicly reported exposure associated with an organization's authorized email domains.
+
+## 12.2 Domain monitoring
+
+Users must be able to configure domains that their organization owns or is authorized to monitor.
+
+The platform should provide:
+
+- Domain configuration.
+- Domain verification.
+- Exposure monitoring.
+- Historical exposure records.
+- Detection source.
+- Exposure date, where available.
+- Affected email addresses, where appropriate.
+- Exposure status.
+
+## 12.3 Email security checks
+
+The module should also provide checks for:
+
+- SPF.
+- DKIM.
+- DMARC.
+
+Users should be able to understand whether the domain's email authentication configuration is present and correctly configured according to available checks.
+
+## 12.4 Privacy
+
+The platform must not display or store stolen passwords or exposed authentication secrets.
+
+A reported exposure must not automatically be described as a confirmed account compromise.
+
+---
+
+# 13. PI-HOLE ANALYTICS
+
+## 13.1 Purpose
+
+This section provides a centralized view of a connected Pi-hole installation.
+
+## 13.2 Dashboard information
+
+The interface should display:
+
+- Total DNS queries.
+- Blocked DNS queries.
+- Blocking percentage.
+- Top requesting clients.
+- Most requested domains.
+- Most blocked domains.
+- DNS activity over time.
+- Recent query activity.
+
+## 13.3 Functionality
+
+Users should be able to:
+
+- Select a time range.
+- Inspect top clients.
+- Inspect requested domains.
+- Inspect blocked domains.
+- Review available query logs.
+- View integration status.
+
+The page must clearly indicate when data is unavailable, stale, or disconnected.
+
+---
+
+# 14. CONTAINER & DOCKER MANAGEMENT
+
+## 14.1 Purpose
+
+This module provides a simplified Docker management interface inspired by the usability of Portainer.
+
+It should allow users to monitor Docker environments and perform permitted basic operational actions.
+
+## 14.2 Docker hosts
+
+Users should be able to see:
+
+- Docker hosts.
+- Host status.
+- Connection status.
+- Last update.
+- Associated organization, client, and site.
+
+## 14.3 Container inventory
+
+Each container should display:
+
+- Container name.
+- Container ID.
+- Image.
+- Image tag.
+- Current status.
+- Port mappings.
+- Associated volumes.
+- Associated networks.
+- Resource usage, where available.
+- Creation or start information, where available.
+
+## 14.4 Container details
+
+The container detail view should provide:
+
+- Overview.
+- Current status.
+- Image information.
+- Port mappings.
+- Volumes.
+- Networks.
+- Logs.
+- Resource usage.
+- Related Compose project, where available.
+
+## 14.5 Container actions
+
+Authorized operators should be able to:
+
+- Start.
+- Stop.
+- Restart.
+
+Actions must require appropriate permissions and confirmation.
+
+The user must always be able to identify the Docker host and container before confirming an action.
+
+Every operational action must be recorded.
+
+The product must not provide unrestricted host command execution through the interface.
+
+---
+
+# 15. LOG INTELLIGENCE
+
+## 15.1 Purpose
+
+Log Intelligence provides a centralized view of relevant infrastructure and security events.
+
+## 15.2 Supported sources
+
+Potential sources include:
+
+- Operating system logs.
+- Authentication events.
+- SSH events.
+- Docker events.
+- Container logs.
+- Pi-hole events.
+- Agent events.
+- NeekoGuard platform activity.
+
+## 15.3 Log interface
+
+The page should provide:
+
+- Timestamp.
+- Source.
+- Device or host.
+- Event category.
+- Severity.
+- Event description.
+
+Users must be able to:
+
+- Search logs.
+- Filter by time.
+- Filter by device.
+- Filter by source.
+- Filter by severity.
+- Filter by event category.
+- Open related device details.
+- Navigate to related alerts.
+
+The interface should provide a readable summary while preserving access to relevant raw event details.
+
+---
+
+# 16. AGENT MANAGEMENT
+
+## 16.1 Purpose
+
+Agents are collectors operating within monitored environments.
+
+They provide NeekoGuard with information about devices, networks, software, and other supported infrastructure data.
+
+## 16.2 Agent inventory
+
+The Agents section should display:
+
+- Agent name.
+- Agent identifier.
+- Agent version.
+- Associated organization.
+- Associated client.
+- Associated site.
+- Host where the agent runs.
+- Connection status.
+- Last check-in.
+- Collected information categories.
+- Assigned discovery scope.
+- Recent errors.
+
+## 16.3 Agent management
+
+Authorized users should be able to:
+
+- Register an agent.
+- Review agent details.
+- Disable an agent.
+- Revoke an agent.
+- Review its reporting status.
+- Review its permitted discovery scope.
+
+Agent identities must be unique and revocable.
+
+Communication must be encrypted.
+
+Agents must only perform actions within their assigned permissions and scope.
+
+The agent system must not provide unrestricted remote shell access.
+
+---
+
+# 17. ALERTS & NOTIFICATIONS
+
+## 17.1 Purpose
+
+The Alerts section centralizes important infrastructure and security events.
+
+## 17.2 Alert categories
+
+Alerts may include:
+
+- New device discovered.
+- Unknown device detected.
+- Device unexpectedly offline.
+- New open port.
+- Service change.
+- Critical vulnerability detected.
+- Certificate expiring.
+- Certificate expired.
+- Agent disconnected.
+- Agent reporting errors.
+- Container stopped.
+- Container unhealthy.
+- Pi-hole integration unavailable.
+- Important infrastructure changes.
+
+## 17.3 Alert information
+
+Each alert should contain:
+
+- Title.
+- Description.
+- Severity.
+- Category.
+- Affected organization.
+- Affected client/site.
+- Affected device or service.
+- Detection time.
+- Latest update.
+- Supporting evidence.
+- Current status.
+
+## 17.4 Alert management
+
+Users with suitable permissions should be able to:
+
+- Acknowledge alerts.
+- Resolve alerts.
+- Assign alerts.
+- Mute selected alert categories where permitted.
+- Open related details.
+
+Alert state changes must be recorded.
+
+---
+
+# 18. ANALYTICS & HISTORICAL DATA
+
+NeekoGuard must retain historical information to help users understand infrastructure changes.
+
+Analytics should include:
+
+- Device count over time.
+- Online/offline trends.
+- New devices.
+- Devices no longer detected.
+- Open-port changes.
+- Vulnerability trends.
+- Certificate expiration outlook.
+- Agent availability.
+- Pi-hole activity.
+- Container status history.
+- Important infrastructure changes.
+
+Users should be able to select:
+
+- Time range.
+- Organization.
+- Client.
+- Site.
+- Network.
+
+Historical information should be accessible from the relevant asset and feature pages, not only from a central analytics section.
+
+Missing data must not be presented as zero or as a healthy state.
+
+---
+
+# 19. SETTINGS & ORGANIZATION MANAGEMENT
+
+## 19.1 Organization settings
+
+Organization administrators should be able to manage:
+
+- Organization details.
+- Clients.
+- Sites.
+- Networks.
+- Authorized discovery ranges.
+- Organization users.
+- Roles and permissions.
+- Email domains.
+- Integrations.
+- Notification preferences.
+- Available data retention settings.
+- Organization activity history.
+
+## 19.2 Platform settings
+
+Platform Administrators should be able to manage:
+
+- Organizations.
+- Platform-level configuration.
+- Platform users and permissions.
+- Deployment-specific settings.
+- Platform activity.
+
+Sensitive credentials must never be displayed in plain text after being saved.
+
+---
+
+# 20. FRONTEND VISUAL DESIGN
+
+## 20.1 Overall visual direction
+
+The frontend should have a professional infrastructure and security operations appearance.
+
+The design should prioritize:
+
+- A clear and consistent navigation system.
+- Structured information.
+- Readable technical data.
+- Consistent spacing.
+- Clear page titles and context.
+- Compact operational dashboards.
+- Well-organized tables.
+- Contextual detail panels.
+- Meaningful status indicators.
+
+Avoid unnecessary decorative images, generic illustrations, and oversized visual elements that reduce the available space for useful information.
+
+## 20.2 Consistency across pages
+
+All sections must share the same visual language.
+
+The Network Discovery & Topology page's three supplied reference images are the primary visual reference for that page.
+
+The remaining pages should feel like parts of the same application, using consistent navigation, typography, spacing, panels, tables, filters, and status treatments.
+
+## 20.3 Tables
+
+Tables should be easy to scan and should support relevant sorting, filtering, and pagination.
+
+Important identifying fields should be visible without requiring users to open every row.
+
+Technical values such as IP addresses, ports, package versions, and certificate fingerprints should be presented clearly.
+
+## 20.4 Detail panels
+
+Related information should be grouped into logical sections.
+
+Where possible, users should be able to move between related devices, services, vulnerabilities, certificates, and events.
+
+## 20.5 Status indicators
+
+Status colors must have consistent meanings throughout the application.
+
+Color must not be the only way to communicate status. Use text labels or icons alongside colors.
+
+Critical findings should be prominent without making the entire interface visually overwhelming.
+
+## 20.6 Charts
+
+Charts should communicate useful information.
+
+They should include appropriate labels, time ranges, legends, and units.
+
+Avoid charts that are purely decorative or do not answer an operational question.
+
+## 20.7 Responsive behavior
+
+The application should be usable on desktop and tablet screens.
+
+The topology and dense operational tables may prioritize desktop presentation, but narrower screens must still provide access to the relevant information through appropriate resizing, scrolling, or alternate layouts.
+
+## 20.8 Frontend technology requirement
+
+The frontend must use:
+
+**React with TypeScript.**
+
+TypeScript is mandatory for frontend application code.
+
+Plain JavaScript must not be used as the frontend application language.
+
+---
+
+# 21. DEPLOYMENT CONFIGURATIONS
+
+NeekoGuard must support three deployment configurations.
+
+These are three ways to deploy the same product, not three different products.
+
+## 21.1 Local Raspberry Pi deployment
+
+Intended for the initial self-hosted environment.
+
+Requirements:
+
+- Runs within the user's local infrastructure.
+- Supports monitoring of the local network.
+- Supports local access.
+- Supports the required agent and integrations.
+- Provides the same core product experience.
+
+## 21.2 Development deployment
+
+Intended for development and testing.
+
+Requirements:
+
+- Runs in its own isolated containerized environment.
+- Uses separate configuration and data.
+- Does not interfere with local or production environments.
+
+## 21.3 Production deployment
+
+Intended for stable and secured operation.
+
+Requirements:
+
+- Secure access.
+- Encrypted communication.
+- Protected secrets.
+- Controlled permissions.
+- Operational visibility.
+- Separation from development and local environments.
+
+---
+
+# 22. SECURITY & PRIVACY REQUIREMENTS
+
+Security is a fundamental product requirement.
+
+NeekoGuard must provide:
+
+- Backend authorization for every protected operation.
+- Strict organization and client data isolation.
+- Encrypted authenticated communication.
+- Secure handling of passwords and tokens.
+- Secure handling of agent credentials.
+- Protection of integration credentials.
+- Least-privilege permissions.
+- Audit history for important actions.
+- Revocation of agent credentials.
+- Authorized discovery scopes.
+- Confirmation for disruptive operations.
+- Protection against sensitive information appearing in logs.
+
+The platform must only monitor networks and systems that the organization is authorized to manage.
+
+Sensitive information must only be available to appropriately authorized users.
+
+---
+
+# 23. GLOBAL USER EXPERIENCE REQUIREMENTS
+
+The following requirements apply to the entire application:
+
+1. Every page must have a clear purpose.
+2. Users must always understand which organization they are viewing.
+3. Relevant pages must provide search and filtering.
+4. Device information must connect to related services, software, vulnerabilities, certificates, and events.
+5. Users must be able to navigate between related records.
+6. Data freshness must be visible.
+7. Unknown information must be shown as unknown.
+8. Stale information must be distinguishable from current information.
+9. Important actions must require appropriate permissions.
+10. Disruptive actions must require confirmation.
+11. Errors must be clearly communicated.
+12. Empty states must explain why no information is available.
+13. Important changes must be recorded in history.
+14. The interface must remain visually consistent across modules.
+15. The application must not display information from organizations the user is not authorized to access.
+
+---
+
+# 24. SCOPE OF THIS DOCUMENT
+
+This document defines the NeekoGuard product and its functional requirements.
+
+It describes:
+
+- What the platform is.
+- What each feature does.
+- What information each feature presents.
+- How users interact with the platform.
+- The required pages and navigation.
+- The frontend visual direction.
+- The multi-organization model.
+- Authentication and security requirements.
+- The three deployment configurations.
+
+This document intentionally does not define:
+
+- Development milestones.
+- Project phases.
+- Delivery schedules.
+- A development roadmap.
+- Repository or folder structure.
+- Database schemas.
+- API endpoint specifications.
+- Detailed coding instructions.
+- Deployment scripts.
+- Low-level implementation architecture.
+
+The purpose is to define **what NeekoGuard must be and how it must behave**, not how the development work must be carried out.
+
+---
+
+**END OF NEEKOGUARD PRODUCT & FUNCTIONAL SPECIFICATION**
