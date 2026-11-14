@@ -8,20 +8,14 @@ from django.views import defaults as default_views
 from django.views.generic import TemplateView
 from drf_spectacular.views import SpectacularAPIView
 from drf_spectacular.views import SpectacularSwaggerView
-from rest_framework.authtoken.views import obtain_auth_token
 
 urlpatterns = [
     path("", TemplateView.as_view(template_name="pages/home.html"), name="home"),
-    path(
-        "about/",
-        TemplateView.as_view(template_name="pages/about.html"),
-        name="about",
-    ),
     # Django Admin, use {% url 'admin:index' %}
     path(settings.ADMIN_URL, admin.site.urls),
-    # User management
-    path("users/", include("nekkoguard.users.urls", namespace="users")),
     path("accounts/", include("allauth.urls")),
+    # JSON authentication API used by the React frontend (django-allauth headless)
+    path("_allauth/", include("allauth.headless.urls")),
     # Your stuff: custom urls includes go here
     # ...
     # Media files
@@ -35,8 +29,9 @@ if settings.DEBUG:
 urlpatterns += [
     # API base url
     path("api/", include("config.api_router")),
-    # DRF auth token
-    path("api/auth-token/", obtain_auth_token, name="obtain_auth_token"),
+    # No public token endpoint: obtain_auth_token checked only email + password,
+    # bypassing mandatory email verification and 2FA. Browser clients sign in through
+    # /_allauth/; tokens for scripts can be issued by an admin (Django admin → Tokens).
     path("api/schema/", SpectacularAPIView.as_view(), name="api-schema"),
     path(
         "api/docs/",

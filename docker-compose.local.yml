@@ -1,3 +1,7 @@
+# Fixed project name: containers, networks and volumes keep the same names
+# no matter which folder this repo is cloned into.
+name: nekkoguard
+
 # Local stack on NekkoRaspberry.
 # Uses the shared services already running in k3s:
 #   - PostgreSQL: postgres.databases.svc.cluster.local:5432  (Postgres-K3s)

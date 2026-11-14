@@ -5,6 +5,7 @@ from importlib import reload
 import pytest
 from django.contrib import admin
 from django.contrib.auth.models import AnonymousUser
+from django.shortcuts import resolve_url
 from django.urls import reverse
 from pytest_django.asserts import assertRedirects
 
@@ -60,6 +61,6 @@ class TestUserAdmin:
         request.user = AnonymousUser()
         response = admin.site.login(request)
 
-        # The `admin` login view should redirect to the `allauth` login view
-        target_url = reverse(settings.LOGIN_URL) + "?next=" + request.path
+        # The `admin` login view should redirect to the (frontend) login page
+        target_url = resolve_url(settings.LOGIN_URL) + "?next=" + request.path
         assertRedirects(response, target_url, fetch_redirect_response=False)
