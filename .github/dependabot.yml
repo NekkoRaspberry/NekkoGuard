@@ -2,9 +2,12 @@
 # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
+# All update PRs target `dev`; they reach `main` through the usual dev → main pull request.
+# Note: GitHub reads this file from the default branch (main).
 updates:
   # Update GitHub actions in workflows
   - package-ecosystem: 'github-actions'
+    target-branch: 'dev'
     directory: '/'
     # Every weekday
     schedule:
@@ -16,6 +19,7 @@ updates:
 
   # Enable version updates for Docker
   - package-ecosystem: 'docker'
+    target-branch: 'dev'
     # Look for a `Dockerfile` in the `compose/development/django` directory
     directories:
       - '/nekkoguard_BE/compose/development/django/'
@@ -37,6 +41,7 @@ updates:
 
 
   - package-ecosystem: 'docker'
+    target-branch: 'dev'
     # Look for a `Dockerfile` in the listed directories
     directories:
       - '/nekkoguard_BE/compose/development/node/'
@@ -50,6 +55,7 @@ updates:
 
   # Enable version updates for Docker Compose files
   - package-ecosystem: 'docker-compose'
+    target-branch: 'dev'
     directories:
       - '/nekkoguard_BE'
       - '/nekkoguard_FE'
@@ -59,6 +65,7 @@ updates:
 
   # Enable version updates for Python/uv
   - package-ecosystem: 'uv'
+    target-branch: 'dev'
     # Look for a `pyproject.toml` in the backend directory
     directory: '/nekkoguard_BE'
     # Every weekday
@@ -72,9 +79,15 @@ updates:
 
   # Frontend npm dependencies
   - package-ecosystem: 'npm'
+    target-branch: 'dev'
     directory: '/nekkoguard_FE'
     schedule:
       interval: 'weekly'
+    # TypeScript majors wait until typescript-eslint supports them (TS 7 broke npm ci, see #102)
+    ignore:
+      - dependency-name: 'typescript'
+        update-types:
+          - 'version-update:semver-major'
     groups:
       npm:
         update-types:

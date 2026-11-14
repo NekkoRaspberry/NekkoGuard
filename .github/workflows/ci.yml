@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # PRs into dev (Dependabot and feature work) and into main are tested;
+  # pushes to main are tested again after merging.
   pull_request:
-    branches: ['main']
+    branches: ['main', 'dev']
     paths-ignore: ['nekkoguard_BE/docs/**', 'nekkoguard_FE/**', 'nekkoguard_specifications/**']
 
   push:
