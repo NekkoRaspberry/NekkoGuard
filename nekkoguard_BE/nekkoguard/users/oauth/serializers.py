@@ -57,7 +57,8 @@ class ApplicationCreateSerializer(serializers.ModelSerializer):
 
     def validate_redirect_uris(self, uris: list[str]) -> list[str]:
         allowed = settings.OAUTH2_PROVIDER.get(
-            "ALLOWED_REDIRECT_URI_SCHEMES", ["https"],
+            "ALLOWED_REDIRECT_URI_SCHEMES",
+            ["https"],
         )
         for uri in uris:
             if uri.split(":", 1)[0] not in allowed or "#" in uri:

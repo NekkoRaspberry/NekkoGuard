@@ -277,4 +277,3 @@ nekkoguard/media/
 .envs/*
 # All env files (local + production) stay out of git: they hold passwords and keys.
 # CI creates dummy local env files itself (see .github/workflows/ci.yml).
-

@@ -3,7 +3,6 @@
 {% load i18n %}
 
 {% block title %}{% translate "Authorize application" %} | NekkoGuard{% endblock title %}
-
 {% block content %}
   {# Consent page for connected applications (django-oauth-toolkit AuthorizationView). #}
   <div class="ng-consent mt-4">
@@ -14,12 +13,10 @@
         {% for field in form %}
           {% if field.is_hidden %}{{ field }}{% endif %}
         {% endfor %}
-
         <h1 class="h4">
           {% blocktranslate with name=application.name %}Allow <strong>{{ name }}</strong> to access your NekkoGuard account?{% endblocktranslate %}
         </h1>
         <p class="ng-muted">{% translate "Signed in as" %} {{ request.user.email }}</p>
-
         <p class="mb-1">{% translate "This application will be able to:" %}</p>
         <ul class="ng-scopes">
           {% for scope in scopes_descriptions %}
@@ -29,14 +26,17 @@
         <p class="ng-muted">
           {% translate "It cannot change anything. You can revoke access at any time in Account → Connected applications." %}
         </p>
-
         {% if form.errors or form.non_field_errors %}
           <div class="alert alert-danger">{{ form.non_field_errors }}{{ form.errors }}</div>
         {% endif %}
-
         <div class="d-flex gap-2 mt-3">
-          <input type="submit" class="btn btn-success" name="allow" value="{% translate 'Allow' %}" />
-          <input type="submit" class="btn btn-outline-secondary" value="{% translate 'Deny' %}" />
+          <input type="submit"
+                 class="btn btn-success"
+                 name="allow"
+                 value="{% translate 'Allow' %}" />
+          <input type="submit"
+                 class="btn btn-outline-secondary"
+                 value="{% translate 'Deny' %}" />
         </div>
       </form>
     {% else %}

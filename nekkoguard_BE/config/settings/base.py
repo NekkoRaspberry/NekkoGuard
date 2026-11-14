@@ -1,5 +1,6 @@
 # ruff: noqa: ERA001, E501
 """Base settings to build other settings files upon."""
+
 import os
 import ssl
 import tomllib
@@ -17,7 +18,7 @@ def _read_version() -> str:
     try:
         with (BASE_DIR / "pyproject.toml").open("rb") as f:
             return tomllib.load(f)["project"]["version"]
-    except (OSError, KeyError, tomllib.TOMLDecodeError):
+    except OSError, KeyError, tomllib.TOMLDecodeError:
         return "unknown"
 
 
@@ -77,7 +78,6 @@ else:
 
 DATABASES["default"]["ATOMIC_REQUESTS"] = True
 # https://docs.djangoproject.com/en/stable/ref/settings/#std:setting-DEFAULT_AUTO_FIELD
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # URLS
 # ------------------------------------------------------------------------------

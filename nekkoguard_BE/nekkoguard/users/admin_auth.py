@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
     from django.http import HttpResponse
 
+
 def session_passed_mfa(request: HttpRequest) -> bool:
     """True when this session completed a 2FA step (allauth records it as "mfa")."""
     records = get_authentication_records(request, request.user)

@@ -35,7 +35,7 @@ class AccountAdapter(DefaultAccountAdapter):
             raise ValidationError(
                 _(
                     "Please use an address from a well-known email provider, "
-                    "such as Gmail or Outlook."
+                    "such as Gmail or Outlook.",
                 ),
                 code="email_domain_not_allowed",
             )

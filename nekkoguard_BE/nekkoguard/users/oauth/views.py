@@ -101,12 +101,14 @@ class AuthorizedAppsView(APIView):
         scopes: dict[int, set[str]] = defaultdict(set)
         # Connected = a still-valid access token or an unrevoked refresh token.
         tokens = AccessToken.objects.filter(
-            user=request.user, expires__gt=timezone.now(),
+            user=request.user,
+            expires__gt=timezone.now(),
         ).select_related(
             "application",
         )
         refresh = RefreshToken.objects.filter(
-            user=request.user, revoked__isnull=True,
+            user=request.user,
+            revoked__isnull=True,
         ).select_related(
             "application",
         )

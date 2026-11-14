@@ -8,9 +8,13 @@
     <h1 class="h4 mt-4">{% translate "Signed in" %}</h1>
     <dl class="ng-details mt-3">
       <dt>{% translate "Name" %}</dt>
-      <dd>{{ request.user.name|default:_("Not set") }}</dd>
+      <dd>
+        {{ request.user.name|default:_("Not set") }}
+      </dd>
       <dt>{% translate "Email" %}</dt>
-      <dd>{{ request.user.email }}</dd>
+      <dd>
+        {{ request.user.email }}
+      </dd>
     </dl>
   {% else %}
     <p class="mt-4">{% translate "You are not signed in." %}</p>

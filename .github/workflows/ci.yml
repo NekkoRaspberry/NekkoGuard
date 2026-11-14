@@ -69,9 +69,11 @@ jobs:
         uses: docker/bake-action@v6
         with:
           source: .
+          # Run bake inside the backend folder: compose paths (compose/…) are relative to it
+          workdir: nekkoguard_BE
           push: false
           load: true
-          files: nekkoguard_BE/docker-compose.development.yml
+          files: docker-compose.development.yml
           targets: django
           set: |
             django.cache-from=type=gha,scope=django-cached-tests
@@ -83,9 +85,10 @@ jobs:
         uses: docker/bake-action@v6
         with:
           source: .
+          workdir: nekkoguard_BE
           push: false
           load: true
-          files: nekkoguard_BE/docker-compose.docs.yml
+          files: docker-compose.docs.yml
           set: |
             docs.cache-from=type=gha,scope=cached-docs
             docs.cache-to=type=gha,scope=cached-docs,mode=max
