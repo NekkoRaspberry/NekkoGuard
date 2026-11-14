@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version-file: 'nekkoguard_BE/.python-version'
       - name: Run pre-commit
@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Checkout Code Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # When env files are git-ignored, .envs/.development/* are not in the repo.
       # Create minimal dummy files so Docker Compose / Django / Postgres work in CI.
@@ -63,14 +63,14 @@ jobs:
           fi
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build and cache local backend
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@v7
         with:
-          source: .
-          # Run bake inside the backend folder: compose paths (compose/…) are relative to it
-          workdir: nekkoguard_BE
+          # bake-action v7: a path source is the working directory; compose paths
+          # (compose/…) are relative to the backend folder
+          source: ./nekkoguard_BE
           push: false
           load: true
           files: docker-compose.development.yml
@@ -82,10 +82,9 @@ jobs:
             postgres.cache-to=type=gha,scope=postgres-cached-tests,mode=max
 
       - name: Build and cache docs
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@v7
         with:
-          source: .
-          workdir: nekkoguard_BE
+          source: ./nekkoguard_BE
           push: false
           load: true
           files: docker-compose.docs.yml
