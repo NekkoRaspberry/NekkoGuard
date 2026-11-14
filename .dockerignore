@@ -1,0 +1,24 @@
+# Dependencies and build output are produced inside the image
+node_modules
+dist
+*.tsbuildinfo
+.vite
+
+# VCS / editor / OS
+.git
+.gitignore
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Secrets and local config — never baked into an image
+.env
+.env.*
+!.env.example
+
+# Docker / docs not needed in the build context
+Dockerfile
+docker-compose*.yml
+README.md
+npm-debug.log*

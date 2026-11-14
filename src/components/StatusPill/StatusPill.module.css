@@ -1,0 +1,74 @@
+.pill {
+  --tone: var(--neutral);
+  --tone-bg: var(--neutral-subtle);
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+  background: var(--tone-bg);
+  color: var(--tone);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.dot {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+.pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  animation: pulse 1.8s var(--ease-out) infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+.success {
+  --tone: var(--success);
+  --tone-bg: var(--success-subtle);
+}
+
+.warning {
+  --tone: var(--warning);
+  --tone-bg: var(--warning-subtle);
+}
+
+.danger {
+  --tone: var(--danger);
+  --tone-bg: var(--danger-subtle);
+}
+
+.info {
+  --tone: var(--info);
+  --tone-bg: var(--info-subtle);
+}
+
+.primary {
+  --tone: var(--primary-hover);
+  --tone-bg: var(--primary-subtle);
+}
+
+.neutral {
+  --tone: var(--neutral);
+  --tone-bg: var(--neutral-subtle);
+}

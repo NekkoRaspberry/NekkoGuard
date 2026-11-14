@@ -1,0 +1,66 @@
+# NekkoGuard frontend.
+#
+# Joins the backend's Docker network so nginx (or Vite in dev) reaches Django by its
+# service name. Start the backend first (nekkoguard_BE: `docker compose -f docker-compose.local.yml up -d`).
+#
+#   Production-like:  docker compose up -d --build            → http://<PI_IP>:8080
+#   Development:      docker compose --profile dev up frontend-dev  → http://<PI_IP>:5173
+#
+# Optional settings go in a git-ignored .env file next to this one (see .env.example).
+
+name: nekkoguard_fe
+
+networks:
+  backend:
+    name: ${BACKEND_NETWORK:-nekkoguard_default}
+    external: true
+
+volumes:
+  node_modules:
+    name: nekkoguard_fe_node_modules
+
+services:
+  frontend:
+    build:
+      context: .
+      target: runtime
+    image: nekkoguard_frontend
+    container_name: nekkoguard_frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: ${BACKEND_URL:-http://django:8000}
+    ports:
+      - '${FRONTEND_PORT:-8080}:8080'
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 64m
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
+
+  frontend-dev:
+    profiles: [dev]
+    build:
+      context: .
+      target: dev
+    image: nekkoguard_frontend_dev
+    container_name: nekkoguard_frontend_dev
+    environment:
+      VITE_PROXY_TARGET: ${BACKEND_URL:-http://django:8000}
+      VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
+    ports:
+      - '${FRONTEND_DEV_PORT:-5173}:5173'
+    volumes:
+      - ./:/app
+      - node_modules:/app/node_modules
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 768m

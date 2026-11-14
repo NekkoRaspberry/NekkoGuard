@@ -1,0 +1,19 @@
+# Dependencies / build
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+
+# Local environment — may contain host names or addresses
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+*.log
+
+# Editor / OS
+.idea/
+*.swp
+.DS_Store
