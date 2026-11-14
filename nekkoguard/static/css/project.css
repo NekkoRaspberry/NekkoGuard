@@ -72,3 +72,17 @@
 .ng-details dd {
   margin: 0;
 }
+
+/* OAuth consent page (templates/oauth2_provider/authorize.html) */
+.ng-consent {
+  max-width: 560px;
+}
+
+.ng-muted {
+  color: #a3a3b5;
+  font-size: 0.9rem;
+}
+
+.ng-scopes {
+  padding-left: 1.25rem;
+}

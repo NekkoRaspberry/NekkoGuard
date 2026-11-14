@@ -9,11 +9,24 @@ from django.views.generic import TemplateView
 from drf_spectacular.views import SpectacularAPIView
 from drf_spectacular.views import SpectacularSwaggerView
 
+from nekkoguard.users.admin_auth import admin_signout
+from nekkoguard.users.oauth import urls as oauth_urls
+
 urlpatterns = [
     path("", TemplateView.as_view(template_name="pages/home.html"), name="home"),
-    # Django Admin, use {% url 'admin:index' %}
+    # Admin sign-out used by the "2FA required" page (before the admin's catch-all)
+    path(f"{settings.ADMIN_URL}signout/", admin_signout, name="admin_signout"),
+    # Django Admin, use {% url 'admin:index' %}. Sign-in: React frontend + 2FA.
     path(settings.ADMIN_URL, admin.site.urls),
     path("accounts/", include("allauth.urls")),
+    # Connected applications: OAuth2 / OpenID Connect provider (consent, tokens)
+    path(
+        "o/",
+        include(
+            (oauth_urls.provider_urlpatterns, "oauth2_provider"),
+            namespace="oauth2_provider",
+        ),
+    ),
     # JSON authentication API used by the React frontend (django-allauth headless)
     path("_allauth/", include("allauth.headless.urls")),
     # Your stuff: custom urls includes go here
@@ -27,6 +40,8 @@ if settings.DEBUG:
 
 # API URLS
 urlpatterns += [
+    # Connected applications: management API + profile resource for approved apps
+    path("api/oauth/", include(oauth_urls.api_urlpatterns)),
     # API base url
     path("api/", include("config.api_router")),
     # No public token endpoint: obtain_auth_token checked only email + password,

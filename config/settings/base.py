@@ -107,11 +107,17 @@ THIRD_PARTY_APPS = [
     "allauth.headless",
     "allauth.mfa",
     "allauth.socialaccount",
+    # External sign-in providers (each is active only when its credentials are set,
+    # see SOCIALACCOUNT_PROVIDERS below). LinkedIn uses OpenID Connect.
+    "allauth.socialaccount.providers.google",
+    "allauth.socialaccount.providers.github",
+    "allauth.socialaccount.providers.openid_connect",
     "django_celery_beat",
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
     "drf_spectacular",
+    "oauth2_provider",
 ]
 
 LOCAL_APPS = [
@@ -281,11 +287,8 @@ ADMIN_URL = "admin/"
 ADMINS = ['"Diogo Chaves" <diogochavesn5@gmail.com>']
 # https://docs.djangoproject.com/en/dev/ref/settings/#managers
 MANAGERS = ADMINS
-# https://cookiecutter-django.readthedocs.io/en/latest/settings.html#other-environment-settings
-# Force the `admin` sign in process to go through the `django-allauth` workflow
-# True: admin sign-in redirects to LOGIN_URL (the React /login, which enforces 2FA);
-# after signing in there, open /admin/ again. False: Django's own admin login page.
-DJANGO_ADMIN_FORCE_ALLAUTH = env.bool("DJANGO_ADMIN_FORCE_ALLAUTH", default=False)
+# Admin sign-in always goes through the React frontend with 2FA:
+# see nekkoguard/users/admin_auth.py.
 
 # LOGGING
 # ------------------------------------------------------------------------------
@@ -412,6 +415,54 @@ ACCOUNT_FORMS = {"signup": "nekkoguard.users.forms.UserSignupForm"}
 SOCIALACCOUNT_ADAPTER = "nekkoguard.users.adapters.SocialAccountAdapter"
 # https://docs.allauth.org/en/latest/socialaccount/configuration.html
 SOCIALACCOUNT_FORMS = {"signup": "nekkoguard.users.forms.UserSocialSignupForm"}
+
+# External sign-in (Google, GitHub, LinkedIn)
+# ------------------------------------------------------------------------------
+# Credentials come only from the (git-ignored) env file. A provider appears on the
+# sign-in page only when both its client ID and secret are set.
+# Callback URL to register with each provider (<frontend origin> = e.g. http://<host>:8080):
+#   Google:   <frontend origin>/accounts/google/login/callback/
+#   GitHub:   <frontend origin>/accounts/github/login/callback/
+#   LinkedIn: <frontend origin>/accounts/oidc/linkedin/login/callback/
+# https://docs.allauth.org/en/latest/socialaccount/providers/index.html
+
+
+def _oauth_app(prefix: str, **extra) -> list[dict]:
+    client_id = env(f"{prefix}_OAUTH_CLIENT_ID", default="")
+    secret = env(f"{prefix}_OAUTH_CLIENT_SECRET", default="")
+    if not (client_id and secret):
+        return []
+    return [{"client_id": client_id, "secret": secret, **extra}]
+
+
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APPS": _oauth_app("GOOGLE"),
+        "SCOPE": ["profile", "email"],
+        "AUTH_PARAMS": {"prompt": "select_account"},
+    },
+    "github": {
+        "APPS": _oauth_app("GITHUB"),
+        "SCOPE": ["read:user", "user:email"],
+    },
+    "openid_connect": {
+        "APPS": _oauth_app(
+            "LINKEDIN",
+            provider_id="linkedin",
+            name="LinkedIn",
+            settings={
+                "server_url": "https://www.linkedin.com/oauth",
+                "token_auth_method": "client_secret_post",
+            },
+        ),
+    },
+}
+# Signing in with a provider whose (provider-verified) email belongs to an existing
+# account signs into — and links — that account. Unknown emails create a new account
+# (only while ACCOUNT_ALLOW_REGISTRATION is on, see users/adapters.py).
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+SOCIALACCOUNT_QUERY_EMAIL = True
 # https://docs.allauth.org/en/latest/mfa/configuration.html
 MFA_TOTP_ISSUER = "NekkoGuard"
 
@@ -433,7 +484,7 @@ HEADLESS_FRONTEND_URLS = {
     "account_reset_password": "/forgot-password",
     "account_reset_password_from_key": "/reset-password/{key}",
     "account_signup": "/signup",
-    "socialaccount_login_error": "/login",
+    "socialaccount_login_error": "/auth/callback",
 }
 
 # django-rest-framework
@@ -460,5 +511,42 @@ SPECTACULAR_SETTINGS = {
     "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
     "SCHEMA_PATH_PREFIX": "/api/",
 }
+# Connected applications: NekkoGuard as an OAuth2 / OpenID Connect provider
+# ------------------------------------------------------------------------------
+# https://django-oauth-toolkit.readthedocs.io/en/latest/settings.html
+# - Apps are registered by staff only (users.oauth API); users approve them on the
+#   consent page (/o/authorize/) and can revoke them later.
+# - Only the authorization-code flow, PKCE required, read-only "profile" scope.
+# - OpenID Connect turns on when a private key file is configured (git-ignored, see
+#   OAUTH2_OIDC_PRIVATE_KEY_FILE); without it the server is plain OAuth2.
+
+
+def _read_oidc_key() -> str:
+    path = env("OAUTH2_OIDC_PRIVATE_KEY_FILE", default="")
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text()
+    except OSError:
+        return ""
+
+
+_OIDC_KEY = _read_oidc_key()
+OAUTH2_PROVIDER = {
+    "SCOPES": {
+        "profile": "Read your NekkoGuard profile (email and name)",
+        **({"openid": "Confirm your identity (OpenID Connect)"} if _OIDC_KEY else {}),
+    },
+    "DEFAULT_SCOPES": ["profile"],
+    "PKCE_REQUIRED": True,
+    "ACCESS_TOKEN_EXPIRE_SECONDS": 60 * 60,
+    "REFRESH_TOKEN_EXPIRE_SECONDS": 30 * 24 * 60 * 60,
+    "ROTATE_REFRESH_TOKEN": True,
+    "ALLOWED_REDIRECT_URI_SCHEMES": ["http", "https"],
+    "OIDC_ENABLED": bool(_OIDC_KEY),
+    "OIDC_RSA_PRIVATE_KEY": _OIDC_KEY,
+    "OAUTH2_VALIDATOR_CLASS": "nekkoguard.users.oauth.validators.NekkoGuardOAuth2Validator",
+}
+
 # Your stuff...
 # ------------------------------------------------------------------------------
