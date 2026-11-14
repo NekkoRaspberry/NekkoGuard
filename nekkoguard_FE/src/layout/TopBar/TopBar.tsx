@@ -1,6 +1,7 @@
 import { ChevronRight, Menu } from 'lucide-react';
 import { Fragment } from 'react';
 import { Link, useMatches } from 'react-router';
+import { ContextBar } from '@/features/tenancy/components/ContextBar';
 import { UserMenu } from './UserMenu';
 import styles from './TopBar.module.css';
 
@@ -43,7 +44,9 @@ export function TopBar({ onOpenNavigation }: { onOpenNavigation: () => void }) {
         >
           <Menu size={18} />
         </button>
-        <nav aria-label="Breadcrumb">
+        <ContextBar />
+        <span className={styles.divider} aria-hidden="true" />
+        <nav aria-label="Breadcrumb" className={styles.breadcrumbs}>
           <ol className={styles.crumbs}>
             {crumbs.map((crumb, index) => {
               const isLast = index === crumbs.length - 1;

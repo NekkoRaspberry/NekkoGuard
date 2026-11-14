@@ -4,7 +4,8 @@ import { ROUTES } from '@/app/routes';
 import { Logo } from '@/components/Logo/Logo';
 import { config } from '@/config/env';
 import { cx } from '@/lib/cx';
-import { NAVIGATION } from '../navigation';
+import { useContextSearch, useIsPlatformAdmin, useTenancy } from '@/features/tenancy/hooks';
+import { visibleNavigation } from '../navigation';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import styles from './Sidebar.module.css';
 
@@ -17,6 +18,16 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobile }: SidebarProps) {
+  const { permissions, currentOrganization, currentTenant } = useTenancy();
+  const isPlatformAdmin = useIsPlatformAdmin();
+  const contextSearch = useContextSearch();
+  const navigation = visibleNavigation({
+    permissions,
+    hasOrganization: currentOrganization !== null,
+    hasTenantMembership: currentTenant?.role != null,
+    isPlatformAdmin,
+  });
+
   return (
     <>
       <div
@@ -39,14 +50,14 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
         </div>
 
         <nav className={styles.nav}>
-          {NAVIGATION.map((group) => (
+          {navigation.map((group) => (
             <div key={group.label} className={styles.group}>
               <p className={styles.groupLabel}>{group.label}</p>
               <ul className={styles.list}>
                 {group.items.map(({ label, to, icon: Icon, end }) => (
                   <li key={to}>
                     <NavLink
-                      to={to}
+                      to={{ pathname: to, search: contextSearch }}
                       end={end ?? false}
                       className={({ isActive }) => cx(styles.item, isActive && styles.active)}
                       title={collapsed ? label : undefined}

@@ -7,7 +7,7 @@ nginx container that also reverse-proxies the Django backend (same origin, no CO
 
 ## Scope
 
-The frontend reflects what the backend implements today (user accounts):
+The frontend reflects what the backend implements today (user accounts and multi-tenancy):
 
 | Page | Route | Backend |
 |---|---|---|
@@ -19,6 +19,10 @@ The frontend reflects what the backend implements today (user accounts):
 | Profile | `/account/profile` | `GET /api/users/me/`, `PATCH /api/users/{pk}/` (`name`) |
 | Security | `/account/security` | `…/account/password/change`, `…/account/email`, `…/account/authenticators/*` (TOTP, recovery codes), `DELETE …/auth/session` |
 | Connected applications | `/account/connected-apps` | `/api/oauth/authorized-apps/` (all users), `/api/oauth/applications/` (staff), consent page `/o/authorize/` |
+| Sites & networks | `/infrastructure` | `/api/tenants/{t}/organizations/{o}/sites/`, `…/networks/` |
+| Organization settings | `/settings/organization` (+ `/members`, `/access`, `/activity`) | `/api/tenants/{t}/organizations/{o}/` (+ `members/`, `overrides/`, `access/`, `activity/`) |
+| Tenant settings | `/settings/tenant` (+ `/organizations`, `/organizations/:orgId`, `/members`, `/activity`) | `/api/tenants/{t}/` (+ `members/`, `organizations/`, `activity/`) |
+| Platform tenants (staff) | `/settings/platform/tenants` | `/api/platform/tenants/` |
 | Google / GitHub / LinkedIn sign-in | `/login`, `/auth/callback`, `/signup/provider` | allauth provider flow; buttons appear only for providers configured in the backend env |
 
 Authentication uses **django-allauth headless** (`/_allauth/browser/v1/…`), browser client:
@@ -38,12 +42,26 @@ src/
 │   ├── auth/     AuthProvider (session state), route guards, auth pages, re-authentication
 │   ├── account/  profile + security (password, emails, 2FA) cards and hooks
 │   ├── overview/ overview page cards
-│   └── system/   API health + WebSocket heartbeat
+│   ├── system/   API health + WebSocket heartbeat
+│   ├── tenancy/  context (TenancyProvider, selection logic, useCan…), context bar, scope gates
+│   ├── infrastructure/ sites & networks page
+│   └── settings/ organization / tenant / platform management screens
 ├── components/   design-system primitives (Button, TextField, Card, Modal, Toast, …)
 ├── layout/       AppShell, Sidebar, TopBar, PageHeader, EntranceLayout
 ├── styles/       tokens.css (design tokens from the look spec), base.css
 └── hooks/, lib/, config/
 ```
+
+## Tenant & organization context
+
+- The top bar selects **Tenant → Organization → Site → Network**. Only what the backend lists for the
+  user is offered; the selection lives in the URL (`?tenant=&org=&site=&network=`), so refresh,
+  back/forward and shared links work. Ids the user cannot access are removed from the URL.
+- Hooks: `useTenancy()`, `useCurrentTenant()`, `useCurrentOrganization()`, `useEffectivePermissions()`,
+  `useCan('sites.manage')`, `useCanTenant('tenant.members.manage')`. They only hide/disable UI — the
+  backend resolves and enforces every permission.
+- Query keys are hierarchical (`['tenants', t, 'organizations', o, …]`, see `src/api/queryKeys.ts`):
+  data of one tenant/organization is never reused for another, and switching drops the previous scope.
 
 ## Requirements
 
@@ -85,6 +103,7 @@ VS Code sees the same dependencies for IntelliSense.
 docker compose --profile dev run --rm frontend-dev npm run typecheck
 docker compose --profile dev run --rm frontend-dev npm run lint
 docker compose --profile dev run --rm frontend-dev npm run build
+docker compose --profile dev run --rm frontend-dev npm test        # Vitest unit tests
 ```
 
 ## Configuration

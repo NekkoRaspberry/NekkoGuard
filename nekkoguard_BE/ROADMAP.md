@@ -11,7 +11,7 @@ models, API and tests first, then the frontend page that uses them.
 | Release | Scope | Why here |
 |---|---|---|
 | **v0.1 Auth** | Commit current work. Fix: any logged-in user can open any user's profile page; WebSocket accepts unauthenticated connections. Add login-attempt limiting. | Almost done |
-| **v0.2 Tenancy** | Organization → Client → Site → Network models, memberships with the 6 roles, org switcher (FE), shared permission check for every endpoint, audit log | Everything else depends on it |
+| **v0.2 Tenancy** | Tenant → Organization → Site → Network models, tenant + organization memberships, organization access policies, per-organization permission overrides, central access resolver for every endpoint, audit log, demo seed; tenant/organization switcher and management screens (FE) | Everything else depends on it |
 | **v0.3 Discovery + Devices** | Celery task runs `nmap` on allowed networks, saves devices + history, basic `Alert` model (new device). FE: device list, device detail, simple topology | Core of the product |
 | **v0.4 Ports & Services** | Extend scan (`nmap -sV`) to save ports/services, alert on new open ports | Builds on the v0.3 scanner |
 | **v0.5 Alerts UI + Overview** | Alerts page (acknowledge/resolve), first real Overview dashboard | Earlier modules now create alerts |

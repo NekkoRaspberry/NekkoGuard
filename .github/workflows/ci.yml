@@ -135,5 +135,8 @@ jobs:
       - name: Lint
         run: npx eslint .
 
+      - name: Unit tests
+        run: npx vitest run
+
       - name: Production build
         run: npx vite build

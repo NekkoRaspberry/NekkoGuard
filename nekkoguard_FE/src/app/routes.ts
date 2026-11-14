@@ -19,6 +19,18 @@ export const ROUTES = {
   profile: '/account/profile',
   security: '/account/security',
   connectedApps: '/account/connected-apps',
+  // Infrastructure (current Organization from the context bar)
+  infrastructure: '/infrastructure',
+  // Settings
+  organizationSettings: '/settings/organization',
+  organizationMembers: '/settings/organization/members',
+  organizationAccess: '/settings/organization/access',
+  organizationActivity: '/settings/organization/activity',
+  tenantSettings: '/settings/tenant',
+  tenantOrganizations: '/settings/tenant/organizations',
+  tenantMembers: '/settings/tenant/members',
+  tenantActivity: '/settings/tenant/activity',
+  platformTenants: '/settings/platform/tenants',
 } as const;
 
 /** Where to send the user when the server reports a pending authentication step. */

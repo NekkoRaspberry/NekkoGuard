@@ -62,7 +62,7 @@ Companies have security teams for this. Homes and small offices have nothing. Ne
 | 🌍 | **External sign-in** — Google, GitHub, LinkedIn | ✅ Available |
 | 🔗 | **Connected apps** — "Sign in with NekkoGuard" for your other self-hosted tools | ✅ Available |
 | 👮 | **Protected admin** — administration only after two-factor sign-in | ✅ Available |
-| 👥 | **Organizations** — homes, clients and sites, with roles | 🚧 Next |
+| 👥 | **Tenants & organizations** — environments, sites and networks, with scoped roles and permission overrides | 🚧 In progress |
 | 📡 | **Network discovery** — every device and its history | 📅 Planned |
 | 🔌 | **Ports & services** — what each device exposes | 📅 Planned |
 | 🚨 | **Alerts & overview** — new devices and open ports in one dashboard | 📅 Planned |
@@ -194,7 +194,7 @@ Found a vulnerability? Please **don't open a public issue** — contact the main
 | Release | Focus |
 |---|---|
 | 🚧 **v0.1** | Accounts, two-factor, external sign-in, connected apps — *finishing* |
-| 📅 **v0.2** | Organizations, clients, sites and roles — *next* |
+| 📅 **v0.2** | Tenants, organizations, sites, networks and scoped permissions — *in progress* |
 | 📅 **v0.3 – v0.5** | Network discovery, devices, ports & services, alerts and overview |
 | 📅 **v0.6 – v0.12** | Certificates, email security, Pi-hole, containers, agents, logs, analytics |
 | 🎯 **v1.0** | Production release |

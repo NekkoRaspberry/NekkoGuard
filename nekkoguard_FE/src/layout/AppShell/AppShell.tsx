@@ -6,6 +6,7 @@ import { Button } from '@/components/Button/Button';
 import { useCurrentUser } from '@/features/account/hooks/useCurrentUser';
 import { ReauthProvider } from '@/features/auth/reauth/ReauthProvider';
 import { RealtimeProvider } from '@/features/system/RealtimeProvider';
+import { TenancyProvider } from '@/features/tenancy/TenancyProvider';
 import { useLocalStorageBoolean } from '@/hooks/useLocalStorageState';
 import { Sidebar } from '../Sidebar/Sidebar';
 import { TopBar } from '../TopBar/TopBar';
@@ -37,6 +38,7 @@ export function AppShell() {
 
   return (
     <RealtimeProvider>
+      <TenancyProvider>
       <ReauthProvider>
       <a href="#main-content" className={styles.skipLink}>
         Skip to content
@@ -57,6 +59,7 @@ export function AppShell() {
         </div>
       </div>
       </ReauthProvider>
+      </TenancyProvider>
     </RealtimeProvider>
   );
 }

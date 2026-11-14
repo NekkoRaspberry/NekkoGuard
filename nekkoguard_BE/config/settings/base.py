@@ -122,6 +122,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     "nekkoguard.users",
+    "nekkoguard.organizations",
     # Your stuff: custom apps go here
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
@@ -510,6 +511,10 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
     "SCHEMA_PATH_PREFIX": "/api/",
+    "ENUM_NAME_OVERRIDES": {
+        "TenantRoleEnum": "nekkoguard.organizations.roles.TenantRole",
+        "OrganizationRoleEnum": "nekkoguard.organizations.roles.OrganizationRole",
+    },
 }
 # Connected applications: NekkoGuard as an OAuth2 / OpenID Connect provider
 # ------------------------------------------------------------------------------

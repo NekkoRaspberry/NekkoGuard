@@ -213,3 +213,22 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-default);
+  flex-shrink: 0;
+}
+
+.breadcrumbs {
+  min-width: 0;
+}
+
+/* The context bar takes priority over breadcrumbs on narrower screens. */
+@media (max-width: 1279px) {
+  .divider,
+  .breadcrumbs {
+    display: none;
+  }
+}

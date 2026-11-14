@@ -6,4 +6,8 @@ set -o nounset
 
 
 python manage.py migrate
+# Opt-in demo data for an empty development database (see seed_demo --help).
+if [ "${NEKKOGUARD_SEED_DEMO:-false}" = "true" ]; then
+    python manage.py seed_demo --if-empty
+fi
 exec uvicorn config.asgi:application --host 0.0.0.0 --reload --reload-include '*.html'
