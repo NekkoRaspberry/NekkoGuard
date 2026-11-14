@@ -15,10 +15,6 @@ networks:
     name: ${BACKEND_NETWORK:-nekkoguard_default}
     external: true
 
-volumes:
-  node_modules:
-    name: nekkoguard_fe_node_modules
-
 services:
   frontend:
     build:
@@ -56,9 +52,11 @@ services:
       VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
     ports:
       - '${FRONTEND_DEV_PORT:-5173}:5173'
+    # Whole project bind-mounted, including ./node_modules (installed with `npm ci` in a
+    # container) — the same folder VS Code reads for IntelliSense.
+    user: '${UID:-1000}:${GID:-1000}'
     volumes:
       - ./:/app
-      - node_modules:/app/node_modules
     networks:
       - backend
     security_opt:

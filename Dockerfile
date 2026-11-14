@@ -35,10 +35,8 @@ FROM deps AS build
 # Build-time overrides. Leave empty for the standard same-origin deployment.
 ARG VITE_API_BASE_URL=""
 ARG VITE_WS_URL=""
-ARG VITE_BACKEND_PUBLIC_URL=""
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
-    VITE_WS_URL=${VITE_WS_URL} \
-    VITE_BACKEND_PUBLIC_URL=${VITE_BACKEND_PUBLIC_URL}
+    VITE_WS_URL=${VITE_WS_URL}
 COPY . .
 RUN npm run build
 
@@ -50,7 +48,7 @@ COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY nginx/spa-headers.inc.template /etc/nginx/templates/spa-headers.inc.template
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Where nginx forwards /api, /accounts, /users, /static and /ws (Docker service name).
+# Where nginx forwards /api, /_allauth, /accounts, /users, /static and /ws (Docker service name).
 ENV BACKEND_URL=http://django:8000 \
     CSP_CONNECT_SRC="'self'"
 

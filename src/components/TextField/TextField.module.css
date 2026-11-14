@@ -119,3 +119,27 @@
   line-height: var(--lh-label);
   color: var(--text-muted);
 }
+
+.reveal {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.reveal:hover {
+  color: var(--text-primary);
+  background: var(--surface-3);
+}
+
+/* One-time codes: large, spaced, monospace */
+.code {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 0.3em;
+  text-align: center;
+}

@@ -12,10 +12,12 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
   rightSlot?: ReactNode;
   /** Extra content aligned to the right of the label (e.g. "Forgot password?"). */
   labelAction?: ReactNode;
+  /** Extra class for the <input> element itself. */
+  inputClassName?: string;
 }
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { label, hint, error, leftSlot, rightSlot, labelAction, id, className, readOnly, ...inputProps },
+  { label, hint, error, leftSlot, rightSlot, labelAction, inputClassName, id, className, readOnly, ...inputProps },
   ref,
 ) {
   const generatedId = useId();
@@ -45,7 +47,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         <input
           ref={ref}
           id={inputId}
-          className={styles.input}
+          className={cx(styles.input, inputClassName)}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           readOnly={readOnly}

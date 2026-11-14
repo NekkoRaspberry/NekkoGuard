@@ -1,0 +1,98 @@
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-6);
+}
+
+.headingIcon {
+  --tone: var(--primary-hover);
+  --tone-bg: var(--primary-subtle);
+
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--tone-bg);
+  color: var(--tone);
+  border: 1px solid color-mix(in srgb, var(--tone) 30%, transparent);
+}
+
+.primary {
+  --tone: var(--primary-hover);
+  --tone-bg: var(--primary-subtle);
+}
+
+.success {
+  --tone: var(--success);
+  --tone-bg: var(--success-subtle);
+}
+
+.danger {
+  --tone: var(--danger);
+  --tone-bg: var(--danger-subtle);
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+  overflow-wrap: anywhere;
+}
+
+.banner {
+  margin-bottom: var(--space-5);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.labelLink {
+  font-size: var(--fs-label);
+  line-height: var(--lh-label);
+  font-weight: 500;
+}
+
+.footerLink {
+  font-weight: 500;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.secondaryAction {
+  display: flex;
+  justify-content: center;
+  font-size: var(--fs-small);
+}
+
+.linkButton {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--primary-hover);
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
+.linkButton:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.loadingRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6) 0;
+  color: var(--text-secondary);
+}

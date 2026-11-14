@@ -1,59 +1,51 @@
-import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { ArrowRight, Mail } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { isApiError } from '@/api/errors';
+import { Link, useLocation, useNavigate } from 'react-router';
+import { allauth } from '@/api/allauth';
+import { ROUTES, routeForPendingFlow } from '@/app/routes';
 import { Banner } from '@/components/Banner/Banner';
 import { Button } from '@/components/Button/Button';
-import { Checkbox } from '@/components/Checkbox/Checkbox';
+import { PasswordField } from '@/components/TextField/PasswordField';
 import { TextField } from '@/components/TextField/TextField';
 import { EntranceLayout } from '@/layout/EntranceLayout/EntranceLayout';
-import { backendUrl } from '@/lib/backendLinks';
+import { AuthHeading } from '../components/AuthHeading';
 import { useAuth } from '../useAuth';
-import styles from './LoginPage.module.css';
+import { useFormErrors } from '../useFormErrors';
+import { isValidEmail } from '../validation';
+import styles from './AuthPages.module.css';
 
-interface FormErrors {
-  email?: string;
-  password?: string;
-  form?: string;
-}
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validate(email: string, password: string): FormErrors {
-  const errors: FormErrors = {};
-  if (!email.trim()) errors.email = 'Enter your email address.';
-  else if (!EMAIL_PATTERN.test(email.trim())) errors.email = 'Enter a valid email address.';
-  if (!password) errors.password = 'Enter your password.';
-  return errors;
-}
+const FIELDS = ['email', 'password'] as const;
 
 export function LoginPage() {
-  const { signIn, lastSignOutReason } = useAuth();
+  const { applySession, lastSignOutReason } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const { errors, setErrors, fromError, clearField } = useFormErrors(FIELDS);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const validation = validate(email, password);
+    const validation: typeof errors = {};
+    if (!email.trim()) validation.email = 'Enter your email address.';
+    else if (!isValidEmail(email)) validation.email = 'Enter a valid email address.';
+    if (!password) validation.password = 'Enter your password.';
     setErrors(validation);
     if (Object.keys(validation).length > 0) return;
 
     setSubmitting(true);
     try {
-      // On success the auth state changes and <RedirectIfAuthenticated> navigates away.
-      await signIn({ email, password, remember });
+      const session = await allauth.login(email.trim(), password);
+      applySession(session);
+      // 200 → <RedirectIfAuthenticated> navigates. 401 → a further step is pending.
+      const next = routeForPendingFlow(session.data?.flows?.find((flow) => flow.is_pending)?.id ?? null);
+      if (next) navigate(next, { state: location.state });
     } catch (error) {
-      let message = 'Sign-in failed. Please try again.';
-      if (isApiError(error)) {
-        // 400 from obtain_auth_token = wrong credentials (or inactive account) — keep the message generic.
-        message = error.status === 400 ? 'The email or password is incorrect.' : error.message;
-      }
-      setErrors({ form: message });
+      fromError(error, 'Sign-in failed. Please try again.');
       setPassword('');
+    } finally {
       setSubmitting(false);
     }
   }
@@ -63,16 +55,13 @@ export function LoginPage() {
       footer={
         <>
           No account yet?{' '}
-          <a href={backendUrl('signup')} className={styles.footerLink}>
+          <Link to={ROUTES.signup} className={styles.footerLink}>
             Create one
-          </a>
+          </Link>
         </>
       }
     >
-      <div className={styles.heading}>
-        <h1>Sign in</h1>
-        <p className={styles.subtitle}>Welcome back. Use the email address of your NekkoGuard account.</p>
-      </div>
+      <AuthHeading title="Sign in" subtitle="Welcome back. Use the email address of your NekkoGuard account." />
 
       {lastSignOutReason === 'expired' && !errors.form && (
         <Banner tone="warning" title="Your session has ended" className={styles.banner}>
@@ -95,44 +84,30 @@ export function LoginPage() {
           autoFocus
           placeholder="you@example.com"
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            clearField('email');
+          }}
           error={errors.email ?? null}
           leftSlot={<Mail size={16} />}
           disabled={submitting}
         />
-        <TextField
+        <PasswordField
           label="Password"
-          type={showPassword ? 'text' : 'password'}
           name="password"
           autoComplete="current-password"
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            clearField('password');
+          }}
           error={errors.password ?? null}
-          leftSlot={<Lock size={16} />}
           disabled={submitting}
           labelAction={
-            <a href={backendUrl('passwordReset')} className={styles.labelLink}>
+            <Link to={ROUTES.forgotPassword} className={styles.labelLink}>
               Forgot password?
-            </a>
+            </Link>
           }
-          rightSlot={
-            <button
-              type="button"
-              className={styles.reveal}
-              onClick={() => setShowPassword((value) => !value)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              aria-pressed={showPassword}
-            >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          }
-        />
-        <Checkbox
-          label="Keep me signed in"
-          description="Only on a private device. Otherwise you are signed out when the browser closes."
-          checked={remember}
-          onChange={(event) => setRemember(event.target.checked)}
-          disabled={submitting}
         />
         <Button type="submit" variant="primary" size="lg" fullWidth loading={submitting} rightIcon={<ArrowRight size={16} />}>
           Sign in

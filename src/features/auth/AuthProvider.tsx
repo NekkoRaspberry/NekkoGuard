@@ -1,95 +1,89 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { setUnauthorizedHandler } from '@/api/client';
-import { fetchCurrentUser, obtainAuthToken } from '@/api/endpoints';
-import { ApiError } from '@/api/errors';
+import { allauth } from '@/api/allauth';
+import { setSessionLostHandler } from '@/api/client';
 import { queryKeys } from '@/api/queryKeys';
-import { AuthContext, type AuthContextValue, type SignInInput, type SignOutReason } from './AuthContext';
-import { tokenStorage, type StoredSession } from './tokenStorage';
+import type { SessionEnvelope } from '@/api/types';
+import { AuthContext, type AuthContextValue, type SignOutReason } from './AuthContext';
+import { AuthBootScreen } from './components/AuthBootScreen';
 
-function toPublicSession(stored: StoredSession | null): AuthContextValue['session'] {
-  if (!stored) return null;
-  return { email: stored.email, persistence: stored.persistence };
+/** Drop every cached query that belongs to a user; keep auth/config state. */
+function clearUserData(queryClient: QueryClient) {
+  queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth' });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [session, setSession] = useState(() => toPublicSession(tokenStorage.read()));
   const [lastSignOutReason, setLastSignOutReason] = useState<SignOutReason | null>(null);
 
-  const signOut = useCallback(
-    (reason: SignOutReason = 'user') => {
-      tokenStorage.clear();
-      queryClient.clear();
-      setSession(null);
-      setLastSignOutReason(reason);
+  const sessionQuery = useQuery({
+    queryKey: queryKeys.session,
+    queryFn: allauth.getSession,
+    staleTime: 60_000,
+    // Re-check when the user comes back to the tab: catches sessions that expired meanwhile.
+    refetchOnWindowFocus: true,
+  });
+
+  const applySession = useCallback(
+    (envelope: SessionEnvelope) => {
+      const previous = queryClient.getQueryData<SessionEnvelope>(queryKeys.session);
+      const previousUserId = previous?.status === 200 ? previous.data?.user?.id : undefined;
+      const nextUserId = envelope.status === 200 ? envelope.data?.user?.id : undefined;
+      if (previousUserId !== nextUserId) clearUserData(queryClient);
+      if (envelope.status === 200) setLastSignOutReason(null);
+      queryClient.setQueryData(queryKeys.session, envelope);
     },
     [queryClient],
   );
 
-  // Any request rejected with an auth failure signs the user out.
-  useEffect(() => {
-    setUnauthorizedHandler(() => signOut('expired'));
-    return () => setUnauthorizedHandler(null);
-  }, [signOut]);
+  const signOut = useCallback(async () => {
+    try {
+      applySession(await allauth.logout());
+    } catch {
+      // Even if the server is unreachable, forget the local state; the next check re-syncs.
+      queryClient.setQueryData<SessionEnvelope>(queryKeys.session, { status: 401, data: { flows: [] }, meta: { is_authenticated: false } });
+      clearUserData(queryClient);
+    }
+    setLastSignOutReason('user');
+  }, [applySession, queryClient]);
 
-  // Keep tabs in sync: signing out in one tab signs out the others (localStorage only fires cross-tab).
+  // Any API call that finds the session gone triggers a fresh session check.
   useEffect(() => {
-    const onStorage = () => {
-      const stored = tokenStorage.read();
-      if (!stored) {
-        queryClient.clear();
-        setSession(null);
-      } else {
-        setSession(toPublicSession(stored));
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    setSessionLostHandler(() => {
+      const current = queryClient.getQueryData<SessionEnvelope>(queryKeys.session);
+      if (current?.status === 200) setLastSignOutReason('expired');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.session });
+    });
+    return () => setSessionLostHandler(null);
   }, [queryClient]);
 
-  const signIn = useCallback(
-    async ({ email, password, remember }: SignInInput) => {
-      const normalisedEmail = email.trim();
-      const { token } = await obtainAuthToken({ username: normalisedEmail, password });
+  const envelope = sessionQuery.data;
 
-      const stored: StoredSession = {
-        token,
-        email: normalisedEmail,
-        persistence: remember ? 'persistent' : 'session',
-      };
-      if (!tokenStorage.write(stored)) {
-        throw new ApiError({
-          kind: 'parse',
-          message: 'This browser blocked local storage, so the session cannot be kept. Check your privacy settings.',
-        });
-      }
-
-      // Validate the token straight away and warm the cache for the first page.
-      try {
-        const user = await fetchCurrentUser();
-        queryClient.setQueryData(queryKeys.currentUser, user);
-      } catch (error) {
-        tokenStorage.clear();
-        throw error;
-      }
-
-      setLastSignOutReason(null);
-      setSession(toPublicSession(stored));
-    },
-    [queryClient],
-  );
-
-  const value = useMemo<AuthContextValue>(
-    () => ({
-      session,
-      isAuthenticated: session !== null,
+  const value = useMemo<AuthContextValue>(() => {
+    const authenticated = envelope?.status === 200 && Boolean(envelope.data?.user);
+    const flows = envelope?.data?.flows ?? [];
+    return {
+      status: authenticated ? 'authenticated' : 'unauthenticated',
+      isAuthenticated: authenticated,
+      user: authenticated ? (envelope?.data?.user ?? null) : null,
+      flows,
+      pendingFlow: flows.find((flow) => flow.is_pending)?.id ?? null,
       lastSignOutReason,
-      signIn,
+      applySession,
       signOut,
-    }),
-    [session, lastSignOutReason, signIn, signOut],
-  );
+    };
+  }, [envelope, lastSignOutReason, applySession, signOut]);
+
+  // First load: nothing can be routed until we know whether a session exists.
+  if (!envelope) {
+    return (
+      <AuthBootScreen
+        error={sessionQuery.isError ? sessionQuery.error : null}
+        retrying={sessionQuery.isFetching}
+        onRetry={() => void sessionQuery.refetch()}
+      />
+    );
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

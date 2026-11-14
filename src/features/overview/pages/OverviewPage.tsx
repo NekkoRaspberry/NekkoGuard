@@ -7,7 +7,7 @@ import { WelcomeCard } from '../components/WelcomeCard';
 import styles from './OverviewPage.module.css';
 
 export function OverviewPage() {
-  const { session } = useAuth();
+  const { user: sessionUser } = useAuth();
   const { data: user, isPending } = useCurrentUser();
 
   return (
@@ -15,7 +15,7 @@ export function OverviewPage() {
       <PageHeader title="Overview" description="Your account and the state of your connection to the NekkoGuard server." />
       <div className={styles.grid}>
         <div className={styles.full}>
-          <WelcomeCard name={user?.name ?? null} email={session?.email ?? ''} loading={isPending} />
+          <WelcomeCard name={user?.name ?? null} email={user?.email ?? sessionUser?.email ?? ''} loading={isPending} />
         </div>
         <div className={styles.wide}>
           <ConnectionStatusCard />

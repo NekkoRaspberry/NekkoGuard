@@ -4,6 +4,7 @@ import { isApiError } from '@/api/errors';
 import { Banner } from '@/components/Banner/Banner';
 import { Button } from '@/components/Button/Button';
 import { useCurrentUser } from '@/features/account/hooks/useCurrentUser';
+import { ReauthProvider } from '@/features/auth/reauth/ReauthProvider';
 import { RealtimeProvider } from '@/features/system/RealtimeProvider';
 import { useLocalStorageBoolean } from '@/hooks/useLocalStorageState';
 import { Sidebar } from '../Sidebar/Sidebar';
@@ -36,6 +37,7 @@ export function AppShell() {
 
   return (
     <RealtimeProvider>
+      <ReauthProvider>
       <a href="#main-content" className={styles.skipLink}>
         Skip to content
       </a>
@@ -54,6 +56,7 @@ export function AppShell() {
           </main>
         </div>
       </div>
+      </ReauthProvider>
     </RealtimeProvider>
   );
 }

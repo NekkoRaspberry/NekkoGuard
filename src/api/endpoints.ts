@@ -1,20 +1,13 @@
 import { apiRequest } from './client';
-import type { AuthTokenRequestDto, AuthTokenResponseDto, UserDto, UserUpdateDto } from './types';
+import type { UserDto, UserUpdateDto } from './types';
 
-/** All REST paths used by the app, in one place. */
+/** DRF REST paths. Authentication lives in `allauth.ts`. */
 export const API_PATHS = {
-  authToken: '/api/auth-token/',
   currentUser: '/api/users/me/',
   user: (id: number) => `/api/users/${id}/`,
+  /** Swagger UI — staff only (IsAdminUser). */
+  docs: '/api/docs/',
 } as const;
-
-export function obtainAuthToken(payload: AuthTokenRequestDto): Promise<AuthTokenResponseDto> {
-  return apiRequest<AuthTokenResponseDto>(API_PATHS.authToken, {
-    method: 'POST',
-    body: payload,
-    authenticated: false,
-  });
-}
 
 export function fetchCurrentUser(signal?: AbortSignal): Promise<UserDto> {
   return apiRequest<UserDto>(API_PATHS.currentUser, signal ? { signal } : {});

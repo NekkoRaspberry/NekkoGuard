@@ -7,12 +7,22 @@ import { KeyValueGrid, UnknownValue } from '@/components/KeyValueGrid/KeyValueGr
 import { Skeleton } from '@/components/Skeleton/Skeleton';
 import { StatusPill } from '@/components/StatusPill/StatusPill';
 import { useCurrentUser } from '@/features/account/hooks/useCurrentUser';
-import { useAuth } from '@/features/auth/useAuth';
+import { useAuthenticators } from '@/features/account/hooks/useSecurityData';
 import styles from './OverviewCards.module.css';
 
 export function AccountSummaryCard() {
-  const { session } = useAuth();
   const { data: user, isPending, isError, error, refetch, isFetching } = useCurrentUser();
+  const authenticators = useAuthenticators();
+
+  const twoFactor = authenticators.isPending ? (
+    <Skeleton width={90} height={18} />
+  ) : authenticators.isError ? (
+    <UnknownValue />
+  ) : authenticators.data.totp ? (
+    <StatusPill tone="success" label="Enabled" />
+  ) : (
+    <StatusPill tone="warning" label="Not enabled" />
+  );
 
   return (
     <Card aria-labelledby="account-summary-title">
@@ -43,17 +53,12 @@ export function AccountSummaryCard() {
           <KeyValueGrid
             items={[
               { label: 'Display name', value: user.name || <UnknownValue>Not set</UnknownValue> },
-              { label: 'Email', value: session?.email ?? <UnknownValue /> },
-              { label: 'User ID', value: user.id ?? <UnknownValue />, mono: true },
+              { label: 'Email', value: user.email },
               {
-                label: 'This browser',
-                value: (
-                  <StatusPill
-                    tone={session?.persistence === 'persistent' ? 'primary' : 'neutral'}
-                    label={session?.persistence === 'persistent' ? 'Kept signed in' : 'Until browser closes'}
-                  />
-                ),
+                label: 'Role',
+                value: <StatusPill tone={user.isStaff ? 'primary' : 'neutral'} label={user.isStaff ? 'Administrator' : 'User'} />,
               },
+              { label: 'Two-factor', value: twoFactor },
             ]}
           />
         )}

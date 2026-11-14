@@ -1,11 +1,11 @@
-import { AtSign, ExternalLink } from 'lucide-react';
+import { ArrowRight, AtSign } from 'lucide-react';
+import { Link } from 'react-router';
+import { ROUTES } from '@/app/routes';
 import { Card, CardBody, CardHeader } from '@/components/Card/Card';
 import { ErrorState } from '@/components/ErrorState/ErrorState';
 import { Skeleton } from '@/components/Skeleton/Skeleton';
 import { TextField } from '@/components/TextField/TextField';
-import { useAuth } from '@/features/auth/useAuth';
 import { PageHeader } from '@/layout/PageHeader/PageHeader';
-import { backendUrl } from '@/lib/backendLinks';
 import { ProfileForm } from '../components/ProfileForm';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import formStyles from '../components/AccountForms.module.css';
@@ -24,7 +24,6 @@ function ProfileFormSkeleton() {
 }
 
 export function ProfilePage() {
-  const { session } = useAuth();
   const { data: user, isPending, isError, error, refetch, isFetching } = useCurrentUser();
 
   return (
@@ -47,21 +46,23 @@ export function ProfilePage() {
             icon={<AtSign size={16} />}
             title="Sign-in identity"
             titleId="sign-in-identity-title"
-            description="Your email address is your login. It is managed and verified by the server."
+            description="Your primary email address is your login. Changes are verified by email."
           />
           <CardBody>
-            <div className={formStyles.readOnlyStack}>
+            {isPending ? (
+              <Skeleton height={38} radius="sm" />
+            ) : (
               <TextField
-                label="Email"
-                value={session?.email ?? ''}
+                label="Primary email"
+                value={user?.email ?? ''}
                 readOnly
                 hint={
-                  <a href={backendUrl('emailAddresses')} target="_blank" rel="noreferrer" className={formStyles.inlineLink}>
-                    Manage email addresses <ExternalLink size={12} />
-                  </a>
+                  <Link to={`${ROUTES.security}#emails`} className={formStyles.inlineLink}>
+                    Manage email addresses <ArrowRight size={12} />
+                  </Link>
                 }
               />
-            </div>
+            )}
           </CardBody>
         </Card>
       </div>

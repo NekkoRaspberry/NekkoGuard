@@ -4,12 +4,12 @@ import { defineConfig, loadEnv } from 'vite';
 
 /**
  * Dev server proxies every backend-owned path to Django so the browser always
- * talks to a single origin (the backend has no CORS origins configured and
- * keeps its CSRF cookie HttpOnly, so same-origin is the supported setup).
+ * talks to a single origin: the session cookie and CSRF token only work same-origin,
+ * and the backend has no CORS origins configured.
  *
  * VITE_PROXY_TARGET is only read here (Node side) and never shipped to the browser.
  */
-const BACKEND_PATHS = ['/api', '/accounts', '/users', '/static'];
+const BACKEND_PATHS = ['/api', '/_allauth', '/accounts', '/users', '/static'];
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');

@@ -9,11 +9,11 @@ import { useAuth } from '@/features/auth/useAuth';
 import styles from './TopBar.module.css';
 
 export function UserMenu() {
-  const { session, signOut } = useAuth();
+  const { user: sessionUser, signOut } = useAuth();
   const { data: user, isPending } = useCurrentUser();
   const navigate = useNavigate();
 
-  const email = session?.email ?? '';
+  const email = user?.email ?? sessionUser?.email ?? '';
   const name = user?.name ?? '';
   const displayName = name || email;
 
@@ -44,7 +44,7 @@ export function UserMenu() {
             <ShieldCheck size={16} /> Security
           </DropdownMenu.Item>
           <DropdownMenu.Separator className={styles.menuSeparator} />
-          <DropdownMenu.Item className={`${styles.menuItem} ${styles.menuDanger}`} onSelect={() => signOut('user')}>
+          <DropdownMenu.Item className={`${styles.menuItem} ${styles.menuDanger}`} onSelect={() => void signOut()}>
             <LogOut size={16} /> Sign out
           </DropdownMenu.Item>
         </DropdownMenu.Content>
