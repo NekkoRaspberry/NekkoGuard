@@ -103,6 +103,11 @@ ACCOUNT_EMAIL_SUBJECT_PREFIX = EMAIL_SUBJECT_PREFIX
 # Django Admin URL regex.
 ADMIN_URL = env("DJANGO_ADMIN_URL")
 
+# FRONTEND
+# ------------------------------------------------------------------------------
+# Frontend and backend are served on the same domain: the brand links to "/".
+FRONTEND_URL = env("DJANGO_FRONTEND_URL", default="/")
+
 # Anymail
 # ------------------------------------------------------------------------------
 # https://anymail.readthedocs.io/en/stable/installation/#installing-anymail

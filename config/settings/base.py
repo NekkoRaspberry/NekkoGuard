@@ -2,6 +2,7 @@
 """Base settings to build other settings files upon."""
 import os
 import ssl
+import tomllib
 from pathlib import Path
 
 import environ
@@ -9,6 +10,19 @@ import environ
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
 # nekkoguard/
 APPS_DIR = BASE_DIR / "nekkoguard"
+
+
+def _read_version() -> str:
+    """Release number from pyproject.toml (the single source of truth)."""
+    try:
+        with (BASE_DIR / "pyproject.toml").open("rb") as f:
+            return tomllib.load(f)["project"]["version"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError):
+        return "unknown"
+
+
+# Backend release shown in the navbar of Django's own pages.
+APP_VERSION = _read_version()
 env = environ.Env()
 
 READ_DOT_ENV_FILE = env.bool("DJANGO_READ_DOT_ENV_FILE", default=False)
@@ -122,9 +136,10 @@ AUTHENTICATION_BACKENDS = [
 # https://docs.djangoproject.com/en/dev/ref/settings/#auth-user-model
 AUTH_USER_MODEL = "users.User"
 # https://docs.djangoproject.com/en/dev/ref/settings/#login-redirect-url
-LOGIN_REDIRECT_URL = "users:redirect"
+LOGIN_REDIRECT_URL = "home"
 # https://docs.djangoproject.com/en/dev/ref/settings/#login-url
-LOGIN_URL = "account_login"
+# The React frontend's sign-in page (allauth's HTML login is disabled: HEADLESS_ONLY).
+LOGIN_URL = "/login"
 
 # PASSWORDS
 # ------------------------------------------------------------------------------
@@ -207,6 +222,8 @@ TEMPLATES = [
                 "django.template.context_processors.tz",
                 "django.contrib.messages.context_processors.messages",
                 "nekkoguard.users.context_processors.allauth_settings",
+                "nekkoguard.users.context_processors.frontend_url",
+                "nekkoguard.users.context_processors.app_version",
             ],
         },
     },
@@ -246,6 +263,16 @@ EMAIL_BACKEND = env(
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-timeout
 EMAIL_TIMEOUT = 5
 
+# FRONTEND
+# ------------------------------------------------------------------------------
+# Where the "NekkoGuard" brand on Django's own pages points: the React frontend.
+# Empty = same host the request came in on, at FRONTEND_PORT. In local/dev Django
+# runs on :8000 and the frontend on :8080 of the same machine, so browsing to
+# http://<host>:8000/ links to http://<host>:8080/ — no address is hardcoded.
+# Production overrides this with "/" (frontend and backend share one domain).
+FRONTEND_URL = env("DJANGO_FRONTEND_URL", default="")
+FRONTEND_PORT = env.int("DJANGO_FRONTEND_PORT", default=8080)
+
 # ADMIN
 # ------------------------------------------------------------------------------
 # Django Admin URL.
@@ -256,6 +283,8 @@ ADMINS = ['"Diogo Chaves" <diogochavesn5@gmail.com>']
 MANAGERS = ADMINS
 # https://cookiecutter-django.readthedocs.io/en/latest/settings.html#other-environment-settings
 # Force the `admin` sign in process to go through the `django-allauth` workflow
+# True: admin sign-in redirects to LOGIN_URL (the React /login, which enforces 2FA);
+# after signing in there, open /admin/ again. False: Django's own admin login page.
 DJANGO_ADMIN_FORCE_ALLAUTH = env.bool("DJANGO_ADMIN_FORCE_ALLAUTH", default=False)
 
 # LOGGING
@@ -353,12 +382,18 @@ MFA_TOTP_ISSUER = "NekkoGuard"
 # The login flow enforces mandatory email verification and 2FA, and logout ends the
 # server-side session.
 HEADLESS_CLIENTS = ("browser",)
-# Links placed in emails point at the frontend. Relative paths are made absolute
-# with the host of the request that triggered the email.
+# The React frontend covers every account flow, so allauth's own HTML pages
+# (/accounts/...) are turned off.
+HEADLESS_ONLY = True
+# Links placed in emails / redirects point at the frontend. Relative paths are made
+# absolute with the host of the request that triggered them. Headless-only mode
+# requires an entry for every URL name allauth may need.
 HEADLESS_FRONTEND_URLS = {
     "account_confirm_email": "/verify-email/{key}",
+    "account_reset_password": "/forgot-password",
     "account_reset_password_from_key": "/reset-password/{key}",
     "account_signup": "/signup",
+    "socialaccount_login_error": "/login",
 }
 
 # django-rest-framework

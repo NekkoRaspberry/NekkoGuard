@@ -79,3 +79,18 @@ def test_headless_session_endpoint_is_available():
     assert response.status_code == 401  # noqa: PLR2004
     flow_ids = {flow["id"] for flow in response.json()["data"]["flows"]}
     assert "login" in flow_ids
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/accounts/login/",
+        "/accounts/signup/",
+        "/accounts/2fa/",
+        "/accounts/password/reset/",
+    ],
+)
+def test_allauth_html_pages_are_disabled(path: str):
+    # HEADLESS_ONLY: account flows live in the React frontend, not Django templates.
+    assert APIClient().get(path).status_code == 404  # noqa: PLR2004
