@@ -6,6 +6,7 @@ import { Button } from '@/components/Button/Button';
 import { CodeField } from '@/components/TextField/CodeField';
 import { EntranceLayout } from '@/layout/EntranceLayout/EntranceLayout';
 import { AuthHeading } from '../components/AuthHeading';
+import { useAdminSignIn } from '../hooks/useAdminSignIn';
 import { useAuth } from '../useAuth';
 import { useFormErrors } from '../useFormErrors';
 import styles from './AuthPages.module.css';
@@ -15,6 +16,7 @@ const FIELDS = ['code'] as const;
 /** Second login step when the account has 2FA enabled (flow `mfa_authenticate`). */
 export function MfaChallengePage() {
   const { applySession, signOut, flows } = useAuth();
+  const toAdmin = useAdminSignIn();
   const [code, setCode] = useState('');
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -43,6 +45,7 @@ export function MfaChallengePage() {
 
   return (
     <EntranceLayout
+      variant={toAdmin ? 'admin' : 'default'}
       footer={
         <button type="button" className={styles.linkButton} onClick={() => void signOut()}>
           Cancel and use a different account

@@ -1,6 +1,8 @@
 import { ChevronsLeft, ChevronsRight, X } from 'lucide-react';
-import { NavLink } from 'react-router';
+import { Link, NavLink } from 'react-router';
+import { ROUTES } from '@/app/routes';
 import { Logo } from '@/components/Logo/Logo';
+import { config } from '@/config/env';
 import { cx } from '@/lib/cx';
 import { NAVIGATION } from '../navigation';
 import { ConnectionIndicator } from './ConnectionIndicator';
@@ -28,7 +30,9 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
         aria-label="Main navigation"
       >
         <div className={styles.brand}>
-          <Logo withWordmark={!collapsed || mobileOpen} />
+          <Link to={ROUTES.overview} className={styles.brandLink} aria-label="NekkoGuard home" onClick={onCloseMobile}>
+            <Logo withWordmark={!collapsed || mobileOpen} />
+          </Link>
           <button type="button" className={styles.closeMobile} onClick={onCloseMobile} aria-label="Close navigation">
             <X size={18} />
           </button>
@@ -71,6 +75,9 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCloseMobil
             {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
             <span className={styles.itemLabel}>Collapse</span>
           </button>
+          <p className={styles.version} title={`NekkoGuard release ${config.appVersion}`}>
+            {collapsed && !mobileOpen ? `v${config.appVersion}` : `NekkoGuard v${config.appVersion}`}
+          </p>
         </div>
       </aside>
     </>

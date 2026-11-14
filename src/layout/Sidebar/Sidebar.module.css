@@ -128,15 +128,75 @@
   transition: opacity var(--duration-fast) var(--ease-out);
 }
 
-.collapsed .itemLabel,
-.collapsed .groupLabel {
-  opacity: 0;
-  pointer-events: none;
+/* Collapsed rail (desktop only — the mobile drawer always shows labels).
+   Labels are removed from the layout, not just hidden: an invisible label still takes
+   width and pushes the icon out of the 64px rail. */
+@media (min-width: 1024px) {
+  .collapsed .itemLabel,
+  .collapsed .connLabel,
+  .collapsed .connDetail {
+    display: none;
+  }
+
+  .collapsed .groupLabel {
+    height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  .collapsed .group + .group {
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .collapsed .nav {
+    padding: var(--space-3) var(--space-2) var(--space-4);
+  }
+
+  .collapsed .item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .collapsed .active::before {
+    left: -8px;
+  }
+
+  .collapsed .brand {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .collapsed .footer {
+    padding: var(--space-3) var(--space-2);
+  }
+
+  .collapsed .version {
+    text-align: center;
+    padding: var(--space-2) 0 0;
+  }
 }
 
-.collapsed .item {
-  justify-content: center;
-  padding: 0;
+.brandLink {
+  display: inline-flex;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+
+.brandLink:hover {
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.version {
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-3) 0;
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .footer {
@@ -260,12 +320,6 @@
 
   .mobileOpen {
     transform: translateX(0);
-  }
-
-  .collapsed .itemLabel,
-  .collapsed .groupLabel {
-    opacity: 1;
-    pointer-events: auto;
   }
 
   .collapsed .item,

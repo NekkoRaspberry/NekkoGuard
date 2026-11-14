@@ -104,7 +104,33 @@ export interface TotpSetupMeta {
   totp_url: string;
 }
 
+/** A third-party sign-in provider configured on the backend (Google, GitHub, LinkedIn). */
+export interface ProviderDto {
+  id: string;
+  name: string;
+  client_id?: string;
+  flows: string[];
+}
+
+/** A provider account linked to the signed-in user. */
+export interface ProviderAccountDto {
+  uid: string;
+  display: string;
+  provider: ProviderDto;
+}
+
+export interface ProviderSignupInfoDto {
+  email: EmailAddressDto[];
+  account: ProviderAccountDto;
+  user: AllauthUser;
+}
+
+export type ProviderProcess = 'login' | 'connect';
+
 export interface ConfigDto {
+  socialaccount?: {
+    providers: ProviderDto[];
+  };
   account: {
     login_methods?: string[];
     is_open_for_signup: boolean;

@@ -9,6 +9,26 @@
   isolation: isolate;
 }
 
+/*
+ * Admin sign-in (opened from the Django admin): teal green-blue instead of violet,
+ * close to Django admin's palette but greener. Redefining the tokens recolours
+ * buttons, focus rings, links and the logo inside this layout only.
+ */
+.admin {
+  --primary: #26a69a;
+  --primary-hover: #3cc4b6;
+  --primary-pressed: #1f8c82;
+  --primary-subtle: rgba(38, 166, 154, 0.14);
+  --focus-ring: 0 0 0 2px #0b0b12, 0 0 0 4px #26a69a;
+  --entrance-glow: rgba(38, 166, 154, 0.18);
+}
+
+/* Slightly larger glow for the admin sign-in (default: 900×600). */
+.admin .glow {
+  width: 1100px;
+  height: 740px;
+}
+
 .glow {
   position: absolute;
   top: -20%;
@@ -16,7 +36,7 @@
   width: 900px;
   height: 600px;
   transform: translateX(-50%);
-  background: radial-gradient(closest-side, rgba(124, 108, 246, 0.16), transparent);
+  background: radial-gradient(closest-side, var(--entrance-glow, rgba(124, 108, 246, 0.16)), transparent);
   z-index: -1;
   pointer-events: none;
 }
@@ -72,4 +92,15 @@
   .card {
     padding: var(--space-6) var(--space-5);
   }
+}
+
+.version {
+  position: absolute;
+  bottom: var(--space-4);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-disabled);
 }

@@ -20,3 +20,7 @@
 .accent {
   color: var(--primary-hover);
 }
+
+.suffix {
+  color: var(--primary-hover);
+}

@@ -10,6 +10,7 @@ import { PasswordField } from '@/components/TextField/PasswordField';
 import { TextField } from '@/components/TextField/TextField';
 import { EntranceLayout } from '@/layout/EntranceLayout/EntranceLayout';
 import { AuthHeading } from '../components/AuthHeading';
+import { ProviderButtons } from '../components/ProviderButtons';
 import { useAuthConfig } from '../hooks/useAuthConfig';
 import { useAuth } from '../useAuth';
 import { useFormErrors } from '../useFormErrors';
@@ -141,6 +142,7 @@ export function SignupPage() {
           Create account
         </Button>
       </form>
+      <ProviderButtons verb="Sign up" />
     </EntranceLayout>
   );
 }

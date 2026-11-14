@@ -16,6 +16,8 @@ The frontend reflects what the backend implements today (user accounts):
 | Overview | `/` | `GET /api/users/me/`, `…/account/authenticators`, WebSocket `ping` → `pong!` |
 | Profile | `/account/profile` | `GET /api/users/me/`, `PATCH /api/users/{pk}/` (`name`) |
 | Security | `/account/security` | `…/account/password/change`, `…/account/email`, `…/account/authenticators/*` (TOTP, recovery codes), `DELETE …/auth/session` |
+| Connected applications | `/account/connected-apps` | `/api/oauth/authorized-apps/` (all users), `/api/oauth/applications/` (staff), consent page `/o/authorize/` |
+| Google / GitHub / LinkedIn sign-in | `/login`, `/auth/callback`, `/signup/provider` | allauth provider flow; buttons appear only for providers configured in the backend env |
 
 Authentication uses **django-allauth headless** (`/_allauth/browser/v1/…`), browser client:
 
@@ -59,7 +61,9 @@ docker compose down                 # stop
 ```
 
 Multi-stage image: `deps` → `build` (type-check + bundle) → `runtime` (nginx-unprivileged, uid 101, port 8080).
-nginx serves the SPA and proxies `/api/`, `/_allauth/`, `/accounts/`, `/users/`, `/static/` and `/ws/` to `BACKEND_URL`.
+nginx serves the SPA and proxies `/api/`, `/_allauth/`, `/admin/`, `/static/` and `/ws/` to `BACKEND_URL`.
+The Django admin is reachable at `http://<PI_IP>:8080/admin/` (staff accounts, Django's own login).
+allauth runs headless-only, so its old HTML pages (`/accounts/…`) no longer exist.
 
 ## Run (development, hot reload)
 

@@ -8,6 +8,7 @@ import { useAuth } from '@/features/auth/useAuth';
 import { PageHeader } from '@/layout/PageHeader/PageHeader';
 import { EmailAddressesCard } from '../components/security/EmailAddressesCard';
 import { PasswordCard } from '../components/security/PasswordCard';
+import { SignInProvidersCard } from '../components/security/SignInProvidersCard';
 import { TwoFactorCard } from '../components/security/TwoFactorCard';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import styles from './AccountPages.module.css';
@@ -88,6 +89,7 @@ export function SecurityPage() {
         <TwoFactorCard />
         <PasswordCard />
         <EmailAddressesCard />
+        <SignInProvidersCard />
         <SessionCard />
         {user?.isStaff && <AdminToolsCard />}
       </div>

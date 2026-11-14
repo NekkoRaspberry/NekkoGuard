@@ -2,21 +2,18 @@ import { Check, Copy, Download } from 'lucide-react';
 import { useState } from 'react';
 import { Banner } from '@/components/Banner/Banner';
 import { Button } from '@/components/Button/Button';
+import { copyToClipboard } from '@/lib/clipboard';
 import styles from './Security.module.css';
 
 /** Displays freshly generated recovery codes once, with copy / download. */
 export function RecoveryCodesPanel({ codes }: { codes: string[] }) {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const text = codes.join('\n');
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API unavailable (e.g. plain HTTP on a LAN address) — download still works.
-    }
+    const ok = await copyToClipboard(text);
+    setCopyState(ok ? 'copied' : 'failed');
+    window.setTimeout(() => setCopyState('idle'), 2500);
   }
 
   function download() {
@@ -40,8 +37,14 @@ export function RecoveryCodesPanel({ codes }: { codes: string[] }) {
         ))}
       </ol>
       <div className={styles.codesActions}>
-        <Button size="sm" variant="secondary" onClick={() => void copy()} leftIcon={copied ? <Check size={14} /> : <Copy size={14} />}>
-          {copied ? 'Copied' : 'Copy'}
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => void copy()}
+          leftIcon={copyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
+          aria-live="polite"
+        >
+          {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed — use Download' : 'Copy'}
         </Button>
         <Button size="sm" variant="secondary" onClick={download} leftIcon={<Download size={14} />}>
           Download .txt

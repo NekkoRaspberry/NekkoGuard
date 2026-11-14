@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react';
+import { AppWindow, LayoutDashboard, ShieldCheck, UserRound, type LucideIcon } from 'lucide-react';
 import { ROUTES } from '@/app/routes';
 
 export interface NavItem {
@@ -28,6 +28,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { label: 'Profile', to: ROUTES.profile, icon: UserRound },
       { label: 'Security', to: ROUTES.security, icon: ShieldCheck },
+      { label: 'Connected apps', to: ROUTES.connectedApps, icon: AppWindow },
     ],
   },
 ];

@@ -201,3 +201,15 @@
     display: none;
   }
 }
+
+.crumbLink {
+  color: inherit;
+  border-radius: var(--radius-xs);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.crumbLink:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

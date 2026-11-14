@@ -1,4 +1,6 @@
+import { config as appConfig } from '@/config/env';
 import { notifySessionLost } from './client';
+import { getCsrfToken } from './csrf';
 import { ApiError, defaultMessageForStatus, type FieldErrors } from './errors';
 import { httpRequest, type HttpMethod } from './http';
 import type {
@@ -8,6 +10,9 @@ import type {
   EmailAddressDto,
   EmailVerificationInfoDto,
   Flow,
+  ProviderAccountDto,
+  ProviderProcess,
+  ProviderSignupInfoDto,
   RecoveryCodesAuthenticatorDto,
   SessionEnvelope,
   TotpAuthenticatorDto,
@@ -125,7 +130,16 @@ export const allauth = {
   resetPassword: (key: string, password: string) =>
     call<SessionEnvelope>('POST', '/auth/password/reset', { key, password }, AUTH_STATES),
 
+  /** Pending provider sign-up: what the provider sent (emails, account). 409 = not pending. */
+  getProviderSignup: () => call<AllauthEnvelope<ProviderSignupInfoDto>>('GET', '/auth/provider/signup'),
+
+  providerSignup: (email: string) => call<SessionEnvelope>('POST', '/auth/provider/signup', { email }, AUTH_STATES),
+
   // ---------------------------------------------------------------- account (signed in)
+
+  listProviderAccounts: () => accountCall<AllauthEnvelope<ProviderAccountDto[]>>('GET', '/account/providers'),
+  disconnectProviderAccount: (provider: string, account: string) =>
+    accountCall<AllauthEnvelope<ProviderAccountDto[]>>('DELETE', '/account/providers', { provider, account }),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     accountCall<AllauthEnvelope>('POST', '/account/password/change', {
@@ -159,6 +173,32 @@ export const allauth = {
   regenerateRecoveryCodes: () =>
     accountCall<AllauthEnvelope<RecoveryCodesAuthenticatorDto>>('POST', '/account/authenticators/recovery-codes'),
 };
+
+/**
+ * Start a provider (Google/GitHub/LinkedIn) sign-in or account link.
+ * The spec requires a synchronous form POST (not fetch): the backend answers with a 302
+ * to the provider, and later returns the browser to `callbackUrl` (`?error=` on failure).
+ */
+export function redirectToProvider(provider: string, process: ProviderProcess, callbackUrl: string): void {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = `${appConfig.apiBaseUrl}${BASE}/auth/provider/redirect`;
+  const fields: Record<string, string> = {
+    provider,
+    process,
+    callback_url: callbackUrl,
+    csrfmiddlewaretoken: getCsrfToken() ?? '',
+  };
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  form.submit();
+}
 
 export function isReauthenticationRequired(error: unknown): error is ReauthenticationRequiredError {
   return error instanceof ReauthenticationRequiredError;

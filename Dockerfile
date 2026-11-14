@@ -48,7 +48,7 @@ COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY nginx/spa-headers.inc.template /etc/nginx/templates/spa-headers.inc.template
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Where nginx forwards /api, /_allauth, /accounts, /users, /static and /ws (Docker service name).
+# Where nginx forwards /api, /_allauth, /admin, /static and /ws (Docker service name).
 ENV BACKEND_URL=http://django:8000 \
     CSP_CONNECT_SRC="'self'"
 

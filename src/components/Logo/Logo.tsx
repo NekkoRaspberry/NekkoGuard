@@ -4,6 +4,8 @@ interface LogoProps {
   /** Show the "NekkoGuard" wordmark next to the mark. */
   withWordmark?: boolean;
   size?: number;
+  /** Extra word after the wordmark, e.g. "Administration". */
+  suffix?: string;
 }
 
 export function LogoMark({ size = 32 }: { size?: number }) {
@@ -24,13 +26,14 @@ export function LogoMark({ size = 32 }: { size?: number }) {
   );
 }
 
-export function Logo({ withWordmark = true, size = 32 }: LogoProps) {
+export function Logo({ withWordmark = true, size = 32, suffix }: LogoProps) {
   return (
     <span className={styles.logo}>
       <LogoMark size={size} />
       {withWordmark && (
         <span className={styles.wordmark}>
           Nekko<span className={styles.accent}>Guard</span>
+          {suffix && <span className={styles.suffix}> {suffix}</span>}
         </span>
       )}
     </span>

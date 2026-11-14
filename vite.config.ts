@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
@@ -9,7 +10,11 @@ import { defineConfig, loadEnv } from 'vite';
  *
  * VITE_PROXY_TARGET is only read here (Node side) and never shipped to the browser.
  */
-const BACKEND_PATHS = ['/api', '/_allauth', '/accounts', '/users', '/static'];
+/** Release version shown in the UI — single source of truth is package.json. */
+const { version: APP_VERSION } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+
+// '/o/' with the slash: a bare '/o' prefix would also capture app routes starting with "o".
+const BACKEND_PATHS = ['/api', '/_allauth', '/admin', '/o/', '/static'];
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -26,6 +31,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    define: {
+      __APP_VERSION__: JSON.stringify(APP_VERSION),
+    },
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },
@@ -36,6 +44,8 @@ export default defineConfig(({ mode }) => {
       allowedHosts,
       proxy: {
         ...httpProxy,
+        // OAuth provider callbacks only (matches the nginx rule)
+        '^/accounts/(?:[a-z_]+|oidc/[a-z0-9_-]+)/login/callback/': { target, changeOrigin: false },
         '/ws': { target: target.replace(/^http/, 'ws'), ws: true },
       },
     },

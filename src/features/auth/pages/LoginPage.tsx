@@ -9,6 +9,8 @@ import { PasswordField } from '@/components/TextField/PasswordField';
 import { TextField } from '@/components/TextField/TextField';
 import { EntranceLayout } from '@/layout/EntranceLayout/EntranceLayout';
 import { AuthHeading } from '../components/AuthHeading';
+import { ProviderButtons } from '../components/ProviderButtons';
+import { useAdminSignIn } from '../hooks/useAdminSignIn';
 import { useAuth } from '../useAuth';
 import { useFormErrors } from '../useFormErrors';
 import { isValidEmail } from '../validation';
@@ -20,6 +22,8 @@ export function LoginPage() {
   const { applySession, lastSignOutReason } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const toAdmin = useAdminSignIn();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,7 +45,8 @@ export function LoginPage() {
       applySession(session);
       // 200 → <RedirectIfAuthenticated> navigates. 401 → a further step is pending.
       const next = routeForPendingFlow(session.data?.flows?.find((flow) => flow.is_pending)?.id ?? null);
-      if (next) navigate(next, { state: location.state });
+      // Keep ?next= (e.g. back to the Django admin) through the 2FA step.
+      if (next) navigate({ pathname: next, search: location.search }, { state: location.state });
     } catch (error) {
       fromError(error, 'Sign-in failed. Please try again.');
       setPassword('');
@@ -52,16 +57,34 @@ export function LoginPage() {
 
   return (
     <EntranceLayout
+      variant={toAdmin ? 'admin' : 'default'}
       footer={
-        <>
-          No account yet?{' '}
-          <Link to={ROUTES.signup} className={styles.footerLink}>
-            Create one
-          </Link>
-        </>
+        toAdmin ? (
+          <>
+            Not an administrator?{' '}
+            {/* Plain /login (no ?next=) = the normal sign-in */}
+            <Link to={ROUTES.login} className={styles.footerLink}>
+              Go back
+            </Link>
+          </>
+        ) : (
+          <>
+            No account yet?{' '}
+            <Link to={ROUTES.signup} className={styles.footerLink}>
+              Create one
+            </Link>
+          </>
+        )
       }
     >
-      <AuthHeading title="Sign in" subtitle="Welcome back. Use the email address of your NekkoGuard account." />
+      <AuthHeading
+        title="Sign in"
+        subtitle={
+          toAdmin
+            ? 'Use your password and a two-factor authentication code to open the admin.'
+            : 'Welcome back. Use the email address of your NekkoGuard account.'
+        }
+      />
 
       {lastSignOutReason === 'expired' && !errors.form && (
         <Banner tone="warning" title="Your session has ended" className={styles.banner}>
@@ -113,6 +136,7 @@ export function LoginPage() {
           Sign in
         </Button>
       </form>
+      <ProviderButtons />
     </EntranceLayout>
   );
 }
