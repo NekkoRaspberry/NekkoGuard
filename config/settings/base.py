@@ -90,6 +90,7 @@ THIRD_PARTY_APPS = [
     "crispy_bootstrap5",
     "allauth",
     "allauth.account",
+    "allauth.headless",
     "allauth.mfa",
     "allauth.socialaccount",
     "django_celery_beat",
@@ -228,7 +229,10 @@ FIXTURE_DIRS = (str(APPS_DIR / "fixtures"),)
 # https://docs.djangoproject.com/en/dev/ref/settings/#session-cookie-httponly
 SESSION_COOKIE_HTTPONLY = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#csrf-cookie-httponly
-CSRF_COOKIE_HTTPONLY = True
+# False: the React frontend (same origin) must read the CSRF token from this cookie and
+# send it back as the X-CSRFToken header. Django's docs note an HttpOnly CSRF cookie adds no
+# practical protection; the session cookie itself stays HttpOnly.
+CSRF_COOKIE_HTTPONLY = False
 # https://docs.djangoproject.com/en/dev/ref/settings/#x-frame-options
 X_FRAME_OPTIONS = "DENY"
 
@@ -339,6 +343,23 @@ ACCOUNT_FORMS = {"signup": "nekkoguard.users.forms.UserSignupForm"}
 SOCIALACCOUNT_ADAPTER = "nekkoguard.users.adapters.SocialAccountAdapter"
 # https://docs.allauth.org/en/latest/socialaccount/configuration.html
 SOCIALACCOUNT_FORMS = {"signup": "nekkoguard.users.forms.UserSocialSignupForm"}
+# https://docs.allauth.org/en/latest/mfa/configuration.html
+MFA_TOTP_ISSUER = "NekkoGuard"
+
+# django-allauth headless (JSON auth API for the React frontend)
+# ------------------------------------------------------------------------------
+# https://docs.allauth.org/en/latest/headless/configuration.html
+# Only the "browser" client: session cookie (HttpOnly) + CSRF, served same-origin.
+# The login flow enforces mandatory email verification and 2FA, and logout ends the
+# server-side session.
+HEADLESS_CLIENTS = ("browser",)
+# Links placed in emails point at the frontend. Relative paths are made absolute
+# with the host of the request that triggered the email.
+HEADLESS_FRONTEND_URLS = {
+    "account_confirm_email": "/verify-email/{key}",
+    "account_reset_password_from_key": "/reset-password/{key}",
+    "account_signup": "/signup",
+}
 
 # django-rest-framework
 # -------------------------------------------------------------------------------
