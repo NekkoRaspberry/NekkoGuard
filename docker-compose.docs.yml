@@ -1,3 +1,7 @@
+# Fixed project name: containers, networks and volumes keep the same names
+# no matter which folder this repo is cloned into.
+name: nekkoguard_docs
+
 services:
   docs:
     image: nekkoguard_development_docs

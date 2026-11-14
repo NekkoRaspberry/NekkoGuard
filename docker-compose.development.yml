@@ -1,3 +1,7 @@
+# Fixed project name: containers, networks and volumes keep the same names
+# no matter which folder this repo is cloned into.
+name: nekkoguard_development
+
 volumes:
   nekkoguard_development_postgres_data: {}
   nekkoguard_development_postgres_data_backups: {}
