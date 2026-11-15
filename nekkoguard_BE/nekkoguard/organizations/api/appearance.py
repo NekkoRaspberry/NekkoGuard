@@ -51,6 +51,7 @@ from nekkoguard.organizations.models import Tenant
 from nekkoguard.organizations.roles import Permission
 from nekkoguard.organizations.roles import TenantPermission
 from nekkoguard.organizations.roles import is_platform_admin
+from nekkoguard.security.throttling import SensitiveThrottleMixin
 
 from .permissions import TENANT_ADMINISTRATION
 from .permissions import OrganizationScopedMixin
@@ -68,10 +69,19 @@ class AppearancePermission(BasePermission):
             raise NotFound
         if request.method in SAFE_METHODS:
             return True
-        return view.can_manage_appearance()
+        if view.has_own_appearance_right():
+            return True
+        if view.is_platform_admin:
+            # Platform staff change any Tenant's branding: MFA-verified session only.
+            access.ensure_request_mfa(request)
+            return True
+        if view.appearance_withheld_by_mfa():
+            access.raise_mfa_required()  # Tenant administration needs MFA
+        return False
 
 
-class _AppearanceBase(APIView):
+class _AppearanceBase(SensitiveThrottleMixin, APIView):
+    throttle_scope = "appearance_changes"
     permission_classes = [IsAuthenticated, AppearancePermission]
 
     @cached_property
@@ -82,8 +92,18 @@ class _AppearanceBase(APIView):
     def can_view_appearance(self) -> bool:
         raise NotImplementedError
 
-    def can_manage_appearance(self) -> bool:
+    def has_own_appearance_right(self) -> bool:
+        """A Tenant / Organization appearance right (not platform staff)."""
         raise NotImplementedError
+
+    def appearance_withheld_by_mfa(self) -> bool:
+        raise NotImplementedError
+
+    def can_manage_appearance(self) -> bool:
+        """Effective: platform staff only with an MFA-verified session."""
+        return self.has_own_appearance_right() or (
+            self.is_platform_admin and access.request_passed_mfa(self.request)
+        )
 
     @property
     def scope(self) -> Tenant | Organization:
@@ -119,10 +139,17 @@ class _TenantScope(TenantScopedMixin):
             access.visible_tenants(self.request.user).filter(pk=self.tenant.pk).exists()
         )
 
-    def can_manage_appearance(self) -> bool:
-        return self.is_platform_admin or (
-            self.tenant_access is not None
-            and self.tenant_access.can(TenantPermission.MANAGE_APPEARANCE)
+    def has_own_appearance_right(self) -> bool:
+        return self.granted_by_tenant_administration()
+
+    def appearance_withheld_by_mfa(self) -> bool:
+        return self.tenant_access is not None and self.tenant_access.withheld_by_mfa(
+            TenantPermission.MANAGE_APPEARANCE,
+        )
+
+    def granted_by_tenant_administration(self) -> bool:
+        return self.tenant_access is not None and self.tenant_access.can(
+            TenantPermission.MANAGE_APPEARANCE,
         )
 
     @property
@@ -152,9 +179,7 @@ class _OrganizationScope(OrganizationScopedMixin):
             for p in (*TENANT_ADMINISTRATION, TenantPermission.MANAGE_APPEARANCE)
         )
 
-    def can_manage_appearance(self) -> bool:
-        if self.is_platform_admin:
-            return True
+    def has_own_appearance_right(self) -> bool:
         tenant_access = self.tenant_access
         if tenant_access is not None and tenant_access.can(
             TenantPermission.MANAGE_APPEARANCE,
@@ -162,6 +187,16 @@ class _OrganizationScope(OrganizationScopedMixin):
             return True
         context = self.organization_context
         return context is not None and context.can(Permission.MANAGE_APPEARANCE)
+
+    def appearance_withheld_by_mfa(self) -> bool:
+        tenant_access = self.tenant_access
+        context = self.organization_context
+        return (
+            tenant_access is not None
+            and tenant_access.withheld_by_mfa(TenantPermission.MANAGE_APPEARANCE)
+        ) or (
+            context is not None and Permission.MANAGE_APPEARANCE in context.mfa_withheld
+        )
 
     @property
     def scope(self) -> Organization:

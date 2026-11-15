@@ -105,6 +105,36 @@ def tenant_users(tenant: Tenant) -> QuerySet[User]:
     ).distinct()
 
 
+def users_in_scope(tenant_access) -> QuerySet[User]:
+    """
+    ``tenant_users`` limited to what this Tenant administrator may see: everyone with
+    organization access "All", otherwise themselves and the people connected to the
+    Organizations they administer (same rule as the Tenant members list).
+    """
+    tenant = tenant_access.tenant
+    if tenant_access.full_scope:
+        return tenant_users(tenant)
+    organizations = tenant_access.administered_organizations()
+    concerns = (
+        Q(pk=tenant_access.membership.user_id)
+        | Q(
+            organization_memberships__organization__in=organizations.values("pk"),
+        )
+        | Q(
+            tenant_memberships__tenant=tenant,
+            tenant_memberships__organization_grants__organization__in=organizations.values(
+                "pk",
+            ),
+        )
+    )
+    if organizations.exists():
+        concerns |= Q(
+            tenant_memberships__tenant=tenant,
+            tenant_memberships__organization_access="all",
+        )
+    return User.objects.filter(concerns).distinct()
+
+
 def organization_users(organization) -> QuerySet[User]:
     """Everyone connected to one Organization: its direct members and the Tenant
     members whose organization access reaches it (any status: suspended ones are

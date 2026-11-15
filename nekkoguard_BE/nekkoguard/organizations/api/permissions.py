@@ -84,7 +84,7 @@ class TenantScopedMixin:
 
     @cached_property
     def tenant_access(self) -> access.TenantAccess | None:
-        return access.get_tenant_access(self.request.user, self.tenant)
+        return access.tenant_access_for(self.request, self.tenant)
 
     def ensure_visible(self) -> None:
         if self.tenant_access is None:
@@ -92,12 +92,15 @@ class TenantScopedMixin:
 
     def satisfies(self, requirement: Requirement) -> bool:
         tenant_access = self.tenant_access
-        return any(
-            isinstance(p, TenantPermission)
-            and tenant_access is not None
-            and tenant_access.can(p)
-            for p in requirement
-        )
+        if tenant_access is None:
+            return False
+        tenant_requirement = [p for p in requirement if isinstance(p, TenantPermission)]
+        if any(tenant_access.can(p) for p in tenant_requirement):
+            return True
+        if any(tenant_access.withheld_by_mfa(p) for p in tenant_requirement):
+            # Only Tenant administration would allow it: 403 mfa_required.
+            access.raise_mfa_required()
+        return False
 
     def get_serializer_context(self) -> dict:
         context = super().get_serializer_context()  # type: ignore[misc]
@@ -126,13 +129,13 @@ class OrganizationScopedMixin(TenantScopedMixin):
 
     @cached_property
     def organization_context(self) -> access.OrganizationContext | None:
-        return access.get_organization_access(self.request.user, self.organization)
+        return access.organization_access_for(self.request, self.organization)
 
     @cached_property
     def tenant_access(self) -> access.TenantAccess | None:
         """Tenant rights count here only if this Organization is in the member's
         organization scope (All / Selected / None) — see ``access.py``."""
-        tenant_access = access.get_tenant_access(self.request.user, self.tenant)
+        tenant_access = access.tenant_access_for(self.request, self.tenant)
         if tenant_access is None or not tenant_access.administers(self.organization):
             return None
         return tenant_access
@@ -155,11 +158,14 @@ class OrganizationScopedMixin(TenantScopedMixin):
 
     def satisfies(self, requirement: Requirement) -> bool:
         context = self.organization_context
-        organization_ok = any(
-            isinstance(p, Permission) and context is not None and context.can(p)
-            for p in requirement
-        )
-        return organization_ok or super().satisfies(requirement)
+        wanted = [p for p in requirement if isinstance(p, Permission)]
+        if context is not None and any(context.can(p) for p in wanted):
+            return True
+        if super().satisfies(requirement):
+            return True
+        if context is not None and any(p in context.mfa_withheld for p in wanted):
+            access.raise_mfa_required()  # a superuser's right, withheld without MFA
+        return False
 
     def get_serializer_context(self) -> dict:
         context = super().get_serializer_context()

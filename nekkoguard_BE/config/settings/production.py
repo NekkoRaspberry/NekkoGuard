@@ -33,9 +33,10 @@ CACHES = {
         "LOCATION": REDIS_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            # Mimicking memcache behavior.
-            # https://github.com/jazzband/django-redis#memcached-exceptions-behavior
-            "IGNORE_EXCEPTIONS": True,
+            # Errors are NOT ignored: the cache holds rate limits. allauth's sign-in and
+            # MFA limits then fail closed when Redis is down; NekkoGuard's own API
+            # throttles decide per endpoint (security/throttling.py).
+            "IGNORE_EXCEPTIONS": False,
         },
     },
 }
@@ -56,15 +57,17 @@ CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_NAME = "__Secure-csrftoken"
 # https://docs.djangoproject.com/en/dev/topics/security/#ssl-https
 # https://docs.djangoproject.com/en/dev/ref/settings/#secure-hsts-seconds
-# TODO: set this to 60 seconds first and then to 518400 once you prove the former works
-SECURE_HSTS_SECONDS = 60
+# One year once HTTPS is proven (a lower value can be set while testing a new domain).
+SECURE_HSTS_SECONDS = env.int("DJANGO_SECURE_HSTS_SECONDS", default=31536000)
 # https://docs.djangoproject.com/en/dev/ref/settings/#secure-hsts-include-subdomains
+# Off by default: only turn on when EVERY subdomain serves HTTPS.
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool(
     "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS",
-    default=True,
+    default=False,
 )
 # https://docs.djangoproject.com/en/dev/ref/settings/#secure-hsts-preload
-SECURE_HSTS_PRELOAD = env.bool("DJANGO_SECURE_HSTS_PRELOAD", default=True)
+# Off by default: preload lists are hard to leave; needs includeSubDomains too.
+SECURE_HSTS_PRELOAD = env.bool("DJANGO_SECURE_HSTS_PRELOAD", default=False)
 # https://docs.djangoproject.com/en/dev/ref/middleware/#x-content-type-options-nosniff
 SECURE_CONTENT_TYPE_NOSNIFF = env.bool(
     "DJANGO_SECURE_CONTENT_TYPE_NOSNIFF",

@@ -51,7 +51,11 @@ export interface TenantDto {
   support_email: string;
   /** Null for users who only reach Organizations directly (no Tenant membership). */
   role: TenantRole | null;
+  /** Effective rights: Tenant administration only once this session passed MFA. */
   permissions: string[];
+  /** The role administers this Tenant, but this session has not passed MFA yet:
+   *  `permissions` are the Member rights until then. */
+  mfa_required: boolean;
   /**
    * The caller's organization scope here. Tenant rights (permissions above) apply
    * only to those Organizations — every role, administrators included. Null = not a member.
@@ -138,6 +142,8 @@ export interface EffectiveAccessDto {
 export interface OrganizationDetailDto extends OrganizationDto {
   /** The caller's own effective access; null when they only administer it. */
   my_access: EffectiveAccessDto | null;
+  /** Rights the caller would have here are withheld until this session passes MFA. */
+  mfa_required: boolean;
 }
 
 export interface OrganizationWriteDto {

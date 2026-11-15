@@ -43,6 +43,7 @@ from nekkoguard.organizations import access
 from nekkoguard.organizations.api.permissions import OrganizationScopedMixin
 from nekkoguard.organizations.api.views import VIEW_ACCESS
 from nekkoguard.organizations.roles import TenantPermission
+from nekkoguard.security.throttling import SensitiveThrottleMixin
 from nekkoguard.support import terms
 from nekkoguard.support.models import TermsAcceptance
 from nekkoguard.support.models import TermsStatus
@@ -139,8 +140,9 @@ def _tenant_for(request: Request, tenant_pk: str) -> Tenant:
     return tenant
 
 
-def can_manage_terms(user, tenant: Tenant) -> bool:
-    tenant_access = access.get_tenant_access(user, tenant)
+def can_manage_terms(request: Request, tenant: Tenant) -> bool:
+    """Effective right: Tenant administration counts only after MFA."""
+    tenant_access = access.tenant_access_for(request, tenant)
     return bool(
         tenant_access is not None and tenant_access.can(TenantPermission.MANAGE),
     )
@@ -151,9 +153,22 @@ MANAGE_DENIED = _("Only tenant administrators can manage the Terms of Service.")
 
 def _managed_tenant(request: Request, tenant_pk: str) -> Tenant:
     tenant = _tenant_for(request, tenant_pk)
-    if not can_manage_terms(request.user, tenant):
+    tenant_access = access.tenant_access_for(request, tenant)
+    if tenant_access is not None and tenant_access.withheld_by_mfa(
+        TenantPermission.MANAGE,
+    ):
+        access.raise_mfa_required()  # Tenant administration: 403 mfa_required
+    if tenant_access is None or not tenant_access.can(TenantPermission.MANAGE):
         raise PermissionDenied(MANAGE_DENIED)
     return tenant
+
+
+def _users_in_scope(request: Request, tenant: Tenant):
+    """The people a (possibly organization-scoped) Tenant administrator may list."""
+    tenant_access = access.tenant_access_for(request, tenant)
+    if tenant_access is None:  # _managed_tenant already refused
+        raise PermissionDenied(MANAGE_DENIED)
+    return terms.users_in_scope(tenant_access)
 
 
 def _with_counts(queryset):
@@ -176,7 +191,8 @@ class PendingTermsView(APIView):
         return Response(TermsVersionSerializer(versions, many=True).data)
 
 
-class AcceptTermsView(APIView):
+class AcceptTermsView(SensitiveThrottleMixin, APIView):
+    throttle_scope = "terms_responses"
     permission_classes = [IsAuthenticated]
 
     @extend_schema(request=None, responses={200: None})
@@ -196,9 +212,10 @@ class AcceptTermsView(APIView):
         return Response({"accepted": True, "pending": remaining})
 
 
-class DeclineTermsView(APIView):
+class DeclineTermsView(SensitiveThrottleMixin, APIView):
     """Refuse the pending Terms: recorded in each Tenant's activity, then signed out."""
 
+    throttle_scope = "terms_responses"
     permission_classes = [IsAuthenticated]
 
     @extend_schema(request=None, responses={200: None})
@@ -230,7 +247,7 @@ class TenantTermsView(APIView):
             {
                 "current": TermsVersionSerializer(current).data if current else None,
                 "accepted_at": accepted_at,
-                "can_manage": can_manage_terms(request.user, tenant),
+                "can_manage": can_manage_terms(request, tenant),
             },
         )
 
@@ -276,9 +293,10 @@ class TermsHistoryDetailView(APIView):
         return Response(data)
 
 
-class TermsVersionListView(APIView):
+class TermsVersionListView(SensitiveThrottleMixin, APIView):
     """All versions (draft first, then newest published) with acceptance counts."""
 
+    throttle_scope = "terms_admin"
     permission_classes = [IsAuthenticated]
 
     @extend_schema(responses=TermsVersionSummarySerializer(many=True))
@@ -322,7 +340,8 @@ class TermsVersionListView(APIView):
         )
 
 
-class TermsVersionDetailView(APIView):
+class TermsVersionDetailView(SensitiveThrottleMixin, APIView):
+    throttle_scope = "terms_admin"
     permission_classes = [IsAuthenticated]
 
     def _version(self, request: Request, tenant_pk: str, version_pk: uuid.UUID):
@@ -368,7 +387,8 @@ class TermsVersionDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class PublishTermsView(APIView):
+class PublishTermsView(SensitiveThrottleMixin, APIView):
+    throttle_scope = "terms_admin"
     permission_classes = [IsAuthenticated]
 
     @extend_schema(request=None, responses=TermsVersionSerializer)
@@ -488,7 +508,11 @@ class TermsAcceptanceListView(APIView):
     @extend_schema(responses=AcceptanceRowSerializer(many=True))
     def get(self, request: Request, tenant_pk: str) -> Response:
         tenant = _managed_tenant(request, tenant_pk)
-        rows = acceptance_rows(tenant, terms.tenant_users(tenant), request.query_params)
+        rows = acceptance_rows(
+            tenant,
+            _users_in_scope(request, tenant),
+            request.query_params,
+        )
         return paginated_rows(self, request, rows)
 
 
@@ -499,7 +523,7 @@ class TermsAcceptanceSummaryView(APIView):
 
     def get(self, request: Request, tenant_pk: str) -> Response:
         tenant = _managed_tenant(request, tenant_pk)
-        return Response(acceptance_summary(tenant))
+        return Response(acceptance_summary(tenant, _users_in_scope(request, tenant)))
 
 
 class _OrganizationTermsView(OrganizationScopedMixin, APIView):

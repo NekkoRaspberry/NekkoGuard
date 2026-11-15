@@ -49,7 +49,7 @@ export function appearanceDto(overrides: DtoOverrides = {}): AppearanceDto {
   };
 }
 
-export function tenantDto(permissions: string[] = [], role: TenantDto['role'] = 'member'): TenantDto {
+export function tenantDto(permissions: string[] = [], role: TenantDto['role'] = 'member', mfaRequired = false): TenantDto {
   return {
     id: TENANT_ID,
     name: 'Acme',
@@ -57,6 +57,7 @@ export function tenantDto(permissions: string[] = [], role: TenantDto['role'] = 
     support_email: '',
     role,
     permissions,
+    mfa_required: mfaRequired,
     organization_access: 'all',
     is_default: true,
     created_at: '2026-01-01T00:00:00Z',
@@ -129,9 +130,21 @@ const auth: AuthContextValue = {
 
 const realtime: RealtimeContextValue = { status: 'connected', latencyMs: 5, lastPongAt: null, reconnect: () => undefined } as RealtimeContextValue;
 
-export function newQueryClient({ isStaff = false } = {}): QueryClient {
+export function newQueryClient({
+  isStaff = false,
+  mfaRequired = false,
+  mfaEnabled,
+}: { isStaff?: boolean; mfaRequired?: boolean; mfaEnabled?: boolean } = {}): QueryClient {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  client.setQueryData(queryKeys.currentUser, { id: 1, email: 'me@example.test', name: 'Me', is_staff: isStaff, url: '' });
+  client.setQueryData(queryKeys.currentUser, {
+    id: 1,
+    email: 'me@example.test',
+    name: 'Me',
+    is_staff: isStaff,
+    mfa_enabled: mfaEnabled ?? !mfaRequired,
+    mfa_required: mfaRequired,
+    url: '',
+  });
   return client;
 }
 

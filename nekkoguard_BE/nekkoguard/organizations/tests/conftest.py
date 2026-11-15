@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING
 import pytest
 from rest_framework.test import APIClient
 
+from nekkoguard.conftest import enable_totp
+from nekkoguard.conftest import sign_in
 from nekkoguard.organizations.models import PermissionOverride
 from nekkoguard.organizations.models import TenantOrganizationAccess
 from nekkoguard.organizations.roles import Effect
@@ -52,7 +54,7 @@ if TYPE_CHECKING:
 def api_client(user: User | None = None) -> APIClient:
     client = APIClient()
     if user is not None:
-        client.force_authenticate(user)
+        sign_in(client, user)  # session; MFA step recorded for users with MFA
     return client
 
 
@@ -78,6 +80,9 @@ class World:
 
 
 def _member(tenant, user, role, *, access=Access.NONE, default="", selected=()):  # noqa: PLR0913
+    if role == TenantRole.ADMIN:
+        # Tenant administration requires a session that passed MFA (access.py).
+        enable_totp(user)
     membership = TenantMembershipFactory(
         tenant=tenant,
         user=user,
@@ -182,7 +187,9 @@ def world(db) -> World:
 
 @pytest.fixture
 def platform_admin(db) -> User:
-    return UserFactory(is_staff=True)
+    user = UserFactory(is_staff=True)
+    enable_totp(user)  # platform-level changes need an MFA-verified session
+    return user
 
 
 @pytest.fixture

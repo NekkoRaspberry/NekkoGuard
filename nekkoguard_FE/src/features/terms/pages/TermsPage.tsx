@@ -138,6 +138,8 @@ function TenantTerms({ tenantId, tenantName }: { tenantId: string; tenantName: s
   const terms = useTenantTerms(tenantId);
   if (terms.isPending) return <Skeleton height={320} radius="sm" />;
   if (terms.isError) return <ErrorState error={terms.error} onRetry={() => void terms.refetch()} retrying={terms.isFetching} />;
+  // `can_manage` is the effective right (Tenant administration needs MFA in this
+  // session): administrators without it read the Terms like any other member.
   return terms.data.can_manage ? (
     <AdminTerms tenantId={tenantId} tenantName={tenantName} terms={terms.data} />
   ) : (

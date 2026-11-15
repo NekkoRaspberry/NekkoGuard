@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { Navigate, NavLink, Outlet, useMatches } from 'react-router';
+import { Navigate, NavLink, Outlet, useLocation, useMatches } from 'react-router';
 import { Banner } from '@/components/Banner/Banner';
 import { ROUTES } from '@/app/routes';
 import { useCurrentUser } from '@/features/account/hooks/useCurrentUser';
+import { AdminAccessUnavailable } from '@/features/account/mfa/AdminAccessUnavailable';
 import { useImpersonation } from '@/features/impersonation/useImpersonation';
 import { useIsPlatformAdmin, useTenancy, useTenantName } from '@/features/tenancy/hooks';
 import { canAdministerTenant, TENANT_PERMISSIONS } from '@/features/tenancy/model';
@@ -16,6 +17,23 @@ interface Link {
   label: string;
   to: string;
   end?: boolean;
+}
+
+/** Is the current page one of the navigation's links (or below one)? */
+function isListed(pathname: string, links: Link[]): boolean {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  return links.some((link) => (link.end ? path === link.to : path === link.to || path.startsWith(`${link.to}/`)));
+}
+
+/**
+ * Pages hidden from the navigation because the session has not passed MFA (the
+ * backend withholds Tenant administration until then): shown as unavailable instead
+ * of being rendered, so they request no data. Other unlisted pages are unchanged.
+ */
+function useMfaReplacement(links: Link[]): ReactNode | undefined {
+  const { pathname } = useLocation();
+  const mfaRequired = useTenancy().currentTenant?.mfa_required === true;
+  return mfaRequired && !isListed(pathname, links) ? <AdminAccessUnavailable /> : undefined;
 }
 
 /** Title of the innermost route that declares one (see `RouteHandle.page`). */
@@ -95,7 +113,10 @@ export function TenantSettingsLayout() {
       links.push({ label: 'Appearance', to: ROUTES.tenantAppearance });
     }
   }
-  return <SettingsFrame label={currentTenant?.name ?? 'Tenant'} links={links} />;
+  // Effective permissions: without MFA in this session an administrator gets the
+  // Member links only, and administrative URLs show the "unavailable" state.
+  const replacement = useMfaReplacement(links);
+  return <SettingsFrame label={currentTenant?.name ?? 'Tenant'} links={links} replacement={replacement} />;
 }
 
 /** Settings → Organization: the Organization selected in the context bar, nothing else. */
@@ -117,7 +138,8 @@ export function OrganizationSettingsLayout() {
       links.push({ label: 'Appearance', to: ROUTES.organizationAppearance });
     }
   }
-  return <SettingsFrame label={currentOrganization?.name ?? 'Organization'} links={links} />;
+  const replacement = useMfaReplacement(links);
+  return <SettingsFrame label={currentOrganization?.name ?? 'Organization'} links={links} replacement={replacement} />;
 }
 
 /** Settings → Profile: the signed-in user's own account, whatever the selected context. */

@@ -134,3 +134,13 @@ Django only answers for host names in `DJANGO_ALLOWED_HOSTS`
 you browse to (e.g. `<PI_IP>`, `nekkoraspberry.local`). After editing, recreate the backend
 container: `docker compose -f docker-compose.local.yml up -d --force-recreate django`.
 If the Pi's address changes (DHCP), update this list — or give the Pi a DHCP reservation.
+
+### Security headers (production nginx)
+
+`nginx/spa-headers.inc.template` sets a strict Content-Security-Policy for the app (scripts and
+styles from this origin only, no `unsafe-inline`/`unsafe-eval`, no framing), plus nosniff,
+`Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, COOP and CORP.
+Runtime `<style>` tags (Radix's scroll lock) carry a per-request nonce: nginx writes
+`$request_id` into the CSP header and into `<meta name="csp-nonce">` in `index.html`
+(`sub_filter`), and `src/main.tsx` hands it to `get-nonce`. The Tiptap editor's CSS injection is
+off; its base rules live in `TermsEditor.module.css`. HSTS comes from the TLS proxy and Django.

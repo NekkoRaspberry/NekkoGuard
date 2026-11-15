@@ -84,6 +84,9 @@ class TenantSerializer(serializers.ModelSerializer[Tenant]):
 
     role = serializers.SerializerMethodField()
     permissions = serializers.SerializerMethodField()
+    #: True when the role administers the Tenant but this session has not passed MFA
+    #: (``permissions`` are then the Member rights).
+    mfa_required = serializers.SerializerMethodField()
     #: The Tenant to open when the user has no remembered choice (see context.py).
     is_default = serializers.SerializerMethodField()
     #: The caller's organization scope here (all / selected / none): their tenant
@@ -99,6 +102,7 @@ class TenantSerializer(serializers.ModelSerializer[Tenant]):
             "support_email",
             "role",
             "permissions",
+            "mfa_required",
             "organization_access",
             "is_default",
             "created_at",
@@ -115,10 +119,30 @@ class TenantSerializer(serializers.ModelSerializer[Tenant]):
         membership = self._membership(obj)
         return membership.role if membership else None
 
+    def _passed_mfa(self) -> bool:
+        if "_passed_mfa" not in self.context:
+            self.context["_passed_mfa"] = access.request_passed_mfa(
+                self.context.get("request"),
+            )
+        return self.context["_passed_mfa"]
+
+    def _role_and_effective(self, obj: Tenant) -> tuple[frozenset, frozenset]:
+        membership = self._membership(obj)
+        role = tenant_permissions_for(membership.role) if membership else frozenset()
+        return role, access.effective_tenant_permissions(
+            role,
+            passed_mfa=self._passed_mfa,
+        )
+
     @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_permissions(self, obj: Tenant) -> list[str]:
-        membership = self._membership(obj)
-        return sorted(tenant_permissions_for(membership.role)) if membership else []
+        """Effective rights: Tenant administration only after MFA in this session."""
+        return sorted(self._role_and_effective(obj)[1])
+
+    def get_mfa_required(self, obj: Tenant) -> bool:
+        """The role administers this Tenant, but MFA is needed first."""
+        role, effective = self._role_and_effective(obj)
+        return role != effective
 
     @extend_schema_field(
         serializers.ChoiceField(choices=OrganizationAccess.choices, allow_null=True),
@@ -307,9 +331,14 @@ class OrganizationDetailSerializer(OrganizationSerializer):
     """Detail view: adds the caller's own effective access (``null`` = none)."""
 
     my_access = serializers.SerializerMethodField()
+    #: Rights the caller would have here are withheld until this session passes MFA.
+    mfa_required = serializers.SerializerMethodField()
 
     class Meta(OrganizationSerializer.Meta):
-        fields = [*OrganizationSerializer.Meta.fields, "my_access"]
+        fields = [*OrganizationSerializer.Meta.fields, "my_access", "mfa_required"]
+
+    def get_mfa_required(self, obj: Organization) -> bool:
+        return bool(self.context.get("mfa_required"))
 
     def get_has_access(self, obj: Organization) -> bool:
         return self.context.get("organization_context") is not None

@@ -9,6 +9,8 @@ from PIL import Image
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from nekkoguard.conftest import enable_totp
+from nekkoguard.conftest import sign_in
 from nekkoguard.organizations.roles import OrganizationAccess
 from nekkoguard.organizations.tests.factories import OrganizationFactory
 from nekkoguard.organizations.tests.factories import OrganizationMembershipFactory
@@ -275,6 +277,7 @@ def test_help_content_requires_sign_in(setup):
 def test_tenant_support_email_is_set_by_tenant_administrators(setup):
     tenant, _org, _user = setup
     admin = UserFactory()
+    enable_totp(admin)  # Tenant administration requires MFA
     TenantMembershipFactory(
         tenant=tenant,
         user=admin,
@@ -282,7 +285,7 @@ def test_tenant_support_email_is_set_by_tenant_administrators(setup):
         organization_access=OrganizationAccess.ALL,
     )
     url = f"/api/tenants/{tenant.pk}/"
-    response = client_for(admin).patch(
+    response = sign_in(APIClient(), admin).patch(
         url,
         {"support_email": " Support@Tenant.Example "},
         format="json",
@@ -297,7 +300,7 @@ def test_tenant_support_email_is_set_by_tenant_administrators(setup):
         format="json",
     )
     assert response.status_code == status.HTTP_403_FORBIDDEN
-    response = client_for(admin).patch(
+    response = sign_in(APIClient(), admin).patch(
         url,
         {"support_email": "not-an-email"},
         format="json",

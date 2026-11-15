@@ -11,6 +11,7 @@ import { AppearanceProvider } from '@/features/appearance/AppearanceProvider';
 import { useEffectiveAppearance } from '@/features/appearance/hooks';
 import { BugReportProvider } from '@/features/help/BugReportProvider';
 import { TermsGate } from '@/features/terms/TermsGate';
+import { MfaRequiredListener } from '@/features/account/mfa/MfaRequiredListener';
 import { ImpersonationBanner } from '@/features/impersonation/ImpersonationBanner';
 import { cx } from '@/lib/cx';
 import { useLocalStorageBoolean } from '@/hooks/useLocalStorageState';
@@ -85,6 +86,7 @@ export function ShellFrame() {
         <main id="main-content" className={styles.content} tabIndex={-1}>
           <ServerUnreachableBanner />
           <ImpersonationBanner className={styles.banner} />
+          <MfaRequiredListener />
           <Outlet />
         </main>
       </div>

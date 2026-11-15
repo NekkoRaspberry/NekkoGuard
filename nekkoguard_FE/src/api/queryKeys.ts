@@ -17,6 +17,7 @@ export const queryKeys = {
   apiHealth: ['system', 'api-health'] as const,
   emails: ['account', 'emails'] as const,
   authenticators: ['account', 'authenticators'] as const,
+  sessions: ['account', 'sessions'] as const,
   providerAccounts: ['account', 'providers'] as const,
   authorizedApps: ['oauth', 'authorized'] as const,
   oauthApplications: ['oauth', 'applications'] as const,

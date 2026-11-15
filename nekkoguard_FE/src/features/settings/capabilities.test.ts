@@ -7,6 +7,7 @@ import { canManageOrganizationAppearance, canManageTenantAppearance, organizatio
 function organization(permissions: string[] | null, canAdminister = true): OrganizationDetailDto {
   return {
     can_administer: canAdminister,
+    mfa_required: false,
     id: 'o1',
     tenant: 't1',
     name: 'Org',

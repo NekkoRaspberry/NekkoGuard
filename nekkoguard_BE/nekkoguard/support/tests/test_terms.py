@@ -6,6 +6,8 @@ from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 
+from nekkoguard.conftest import enable_totp
+from nekkoguard.conftest import sign_in
 from nekkoguard.organizations.models import ActivityEntry
 from nekkoguard.organizations.roles import OrganizationAccess
 from nekkoguard.organizations.roles import TenantRole
@@ -40,12 +42,13 @@ DOC = {
 
 def client_for(user):
     client = APIClient()
-    client.force_login(user)  # a real session: the middleware sees the user
+    sign_in(client, user)  # a real session: the middleware sees the user
     return client
 
 
 def admin_of(tenant):
     user = UserFactory()
+    enable_totp(user)  # Tenant administration requires MFA
     TenantMembershipFactory(
         tenant=tenant,
         user=user,
@@ -325,6 +328,7 @@ class TestManagementApi:
         tenant = TenantFactory()
         org = OrganizationFactory(tenant=tenant)
         admin = UserFactory()
+        enable_totp(admin)
         membership = TenantMembershipFactory(
             tenant=tenant,
             user=admin,
@@ -652,3 +656,60 @@ class TestAcceptanceOrdering:
         assert [r["status"] for r in by_status] == sorted(
             r["status"] for r in by_status
         )
+
+
+class TestScopedAdministratorsSeeTheirScope:
+    """An administrator of selected Organizations lists only the people there."""
+
+    def test_acceptance_list_and_summary_follow_the_organization_scope(self):
+        from nekkoguard.organizations.models import TenantOrganizationAccess  # noqa: PLC0415
+        from nekkoguard.organizations.roles import OrganizationRole  # noqa: PLC0415
+
+        tenant = TenantFactory()
+        mine, other = (
+            OrganizationFactory(tenant=tenant),
+            OrganizationFactory(tenant=tenant),
+        )
+        scoped = UserFactory()
+        enable_totp(scoped)
+        membership = TenantMembershipFactory(
+            tenant=tenant,
+            user=scoped,
+            role=TenantRole.ADMIN,
+            organization_access=OrganizationAccess.SELECTED,
+        )
+        TenantOrganizationAccess.objects.create(
+            membership=membership,
+            organization=mine,
+        )
+        insider, outsider = UserFactory(), UserFactory()
+        OrganizationMembershipFactory(
+            organization=mine,
+            user=insider,
+            role=OrganizationRole.VIEWER,
+        )
+        OrganizationMembershipFactory(
+            organization=other,
+            user=outsider,
+            role=OrganizationRole.VIEWER,
+        )
+        version = published(tenant, admin_of(tenant))
+
+        client = client_for(scoped)
+        client.post(f"/api/terms/{version.pk}/accept/")
+        response = client.get(f"{base(tenant)}acceptances/?page_size=100")
+        assert response.status_code == status.HTTP_200_OK, response.content
+        rows = response.data["results"]
+        emails = {row["user"]["email"] for row in rows}
+        assert insider.email in emails
+        assert outsider.email not in emails
+        summary = client.get(f"{base(tenant)}summary/").json()
+        assert summary["current_stats"]["required"] <= len(rows)
+
+        # A full-scope administrator still sees everyone.
+        full_admin = admin_of(tenant)
+        full = client_for(full_admin)
+        full.post(f"/api/terms/{version.pk}/accept/")
+        listed = full.get(f"{base(tenant)}acceptances/?page_size=100").data["results"]
+        everyone = {r["user"]["email"] for r in listed}
+        assert {insider.email, outsider.email} <= everyone

@@ -29,6 +29,7 @@ from rest_framework.exceptions import ValidationError
 
 from .access import OrganizationContext
 from .access import TenantAccess
+from .access import raise_mfa_required
 from .access import reaches_through_tenant
 from .access import within_scope
 from .models import ActivityEntry
@@ -449,7 +450,16 @@ class OrganizationActor:
 
     @property
     def is_tenant_manager(self) -> bool:
+        """Acting with Tenant administration powers (effective: after MFA)."""
         return self.tenant_access is not None and self.tenant_access.can(
+            TenantPermission.MANAGE_MEMBERS,
+        )
+
+    @property
+    def tenant_management_needs_mfa(self) -> bool:
+        """The role would manage here, but the request has not passed MFA: only the
+        actor's Organization rights apply until then."""
+        return self.tenant_access is not None and self.tenant_access.withheld_by_mfa(
             TenantPermission.MANAGE_MEMBERS,
         )
 
@@ -483,6 +493,8 @@ def _target_standing(
 def _ensure_may_manage_user(actor: OrganizationActor, user: User) -> None:
     """May ``actor`` change ``user``'s membership/overrides in this Organization?"""
     if not actor.assignable_roles():
+        if actor.tenant_management_needs_mfa:
+            raise_mfa_required()
         raise PermissionDenied(_("You cannot manage access to this organization."))
     if user.pk == actor.user.pk:
         raise PermissionDenied(_("You cannot change your own access."))
@@ -491,6 +503,8 @@ def _ensure_may_manage_user(actor: OrganizationActor, user: User) -> None:
         return
     # Organization-level managers never touch Tenant administrators.
     if tm and tm.role == TenantRole.ADMIN:
+        if actor.tenant_management_needs_mfa:
+            raise_mfa_required()  # 403 mfa_required: Tenant administration needs MFA
         raise PermissionDenied(_("You cannot change a tenant administrator's access."))
     target_roles = set()
     if om is not None:

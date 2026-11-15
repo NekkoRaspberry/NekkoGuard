@@ -90,7 +90,7 @@ class Permission(StrEnum):
 PERMISSION_CHOICES = [(p.value, p.value) for p in Permission]
 
 # Every role may look (read-only) at sites, networks, members, permissions and activity.
-_READ = frozenset(
+READ_PERMISSIONS = _READ = frozenset(
     {
         Permission.VIEW_SITES,
         Permission.VIEW_NETWORKS,

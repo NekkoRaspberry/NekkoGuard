@@ -83,6 +83,9 @@ server {
     location = /index.html {
         include /etc/nginx/conf.d/spa-headers.inc;
         add_header Cache-Control "no-cache" always;
+        # Per-request CSP nonce for style tags (see spa-headers.inc and src/main.tsx).
+        sub_filter '__CSP_NONCE__' '$request_id';
+        sub_filter_once on;
     }
 
     location / {

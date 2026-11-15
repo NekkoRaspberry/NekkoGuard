@@ -14,9 +14,9 @@ from rest_framework.parsers import FormParser
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from nekkoguard.security.throttling import SensitiveThrottleMixin
 from nekkoguard.support import content
 from nekkoguard.support import services
 from nekkoguard.support.models import ATTACHMENT_MAX_BYTES
@@ -45,7 +45,7 @@ class ReleasesView(APIView):
 
 
 @method_decorator(transaction.non_atomic_requests, name="dispatch")
-class BugReportView(APIView):
+class BugReportView(SensitiveThrottleMixin, APIView):
     """
     Submit a bug report (multipart). Not atomic on purpose: the report is committed
     before the email is attempted, so a delivery failure never loses it. Changes are
@@ -54,7 +54,6 @@ class BugReportView(APIView):
 
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
-    throttle_classes = [ScopedRateThrottle]
     throttle_scope = "bug_reports"
 
     @extend_schema(

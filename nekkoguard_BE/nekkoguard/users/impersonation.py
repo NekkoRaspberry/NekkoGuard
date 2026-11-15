@@ -38,6 +38,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from nekkoguard.security.throttling import SensitiveThrottleMixin
+
 from .models import ImpersonationEvent
 from .models import User
 
@@ -135,13 +137,14 @@ class _StartSerializer(serializers.Serializer):
     user = serializers.IntegerField()
 
 
-class ImpersonationView(APIView):
+class ImpersonationView(SensitiveThrottleMixin, APIView):
     """
     GET    /api/impersonation/   status (any signed-in user; reveals nothing to others)
     POST   /api/impersonation/   {"user": id} start viewing as that user (superusers)
     DELETE /api/impersonation/   back to your own account
     """
 
+    throttle_scope = "impersonation"
     permission_classes = [IsAuthenticated]
 
     @extend_schema(responses=OpenApiTypes.OBJECT)

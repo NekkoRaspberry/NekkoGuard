@@ -192,6 +192,9 @@ export function TermsEditor({
   const [linking, setLinking] = useState(false);
   const editor = useEditor({
     extensions: createExtensions(),
+    // No <style> tag injected at runtime (the CSP forbids inline styles): Tiptap's few
+    // base rules live in TermsEditor.module.css.
+    injectCSS: false,
     content: value,
     editorProps: {
       attributes: { class: styles.content ?? '', 'aria-label': label, 'aria-multiline': 'true', role: 'textbox' },

@@ -41,6 +41,7 @@ test-suite checks that both implementations always agree.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -55,6 +56,7 @@ from .models import PermissionOverride
 from .models import Tenant
 from .models import TenantMembership
 from .models import TenantOrganizationAccess
+from .roles import READ_PERMISSIONS
 from .roles import Effect
 from .roles import OrganizationAccess
 from .roles import OrganizationRole
@@ -65,11 +67,13 @@ from .roles import organization_permissions_for
 from .roles import tenant_permissions_for
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from collections.abc import Mapping
 
     from django.contrib.auth.models import AbstractBaseUser
     from django.contrib.auth.models import AnonymousUser
     from django.db.models import QuerySet
+    from django.http import HttpRequest
 
     AnyUser = AbstractBaseUser | AnonymousUser
 
@@ -95,10 +99,23 @@ class Decision:
 class TenantAccess:
     tenant: Tenant
     membership: TenantMembership
+    #: Effective rights: what this request may do.
     permissions: frozenset[TenantPermission]
+    #: What the role would give with MFA (``permissions`` when nothing is withheld).
+    role_permissions: frozenset[TenantPermission] | None = None
 
     def can(self, permission: TenantPermission) -> bool:
         return permission in self.permissions
+
+    @property
+    def mfa_required(self) -> bool:
+        """Tenant administration withheld because the request has not passed MFA."""
+        return bool(self.role_permissions) and self.role_permissions != self.permissions
+
+    def withheld_by_mfa(self, permission: TenantPermission) -> bool:
+        return permission not in self.permissions and permission in (
+            self.role_permissions or ()
+        )
 
     @property
     def full_scope(self) -> bool:
@@ -171,9 +188,15 @@ class OrganizationContext:
     #: True when the Tenant membership's policy reaches this Organization.
     via_tenant: bool
     decisions: dict[Permission, Decision]
+    #: Permissions withheld because the request has not passed MFA (superusers).
+    mfa_withheld: frozenset[Permission] = frozenset()
 
     def can(self, permission: Permission) -> bool:
         return self.decisions[permission].allowed
+
+    @property
+    def mfa_required(self) -> bool:
+        return bool(self.mfa_withheld)
 
     @property
     def permissions(self) -> frozenset[Permission]:
@@ -213,7 +236,120 @@ def superuser_membership(user: AbstractBaseUser, tenant: Tenant) -> TenantMember
 # ---------------------------------------------------------------- decision 1
 
 
+# ---------------------------------------------------------------- MFA for admins
+
+
+def has_mfa(user: AnyUser) -> bool:
+    """A fully activated second factor (authenticator app or security key)."""
+    from allauth.mfa.utils import is_mfa_enabled  # noqa: PLC0415
+
+    return bool(user.is_authenticated) and is_mfa_enabled(user)
+
+
+def request_passed_mfa(request: HttpRequest | None) -> bool:
+    """
+    Authentication assurance of *this request*: a browser session that completed a
+    second-factor step (sign-in code, MFA re-authentication, or setting MFA up in this
+    session — see ``users/signals.py``), and the account still has MFA.
+
+    Never true for API tokens (DRF ``Token``, OAuth bearer tokens): a token proves
+    the password-level identity only, so it never unlocks Tenant administration.
+    ``request`` is ``None`` outside a request (services, tasks): no assurance.
+    """
+    if request is None or not has_mfa(request.user):
+        return False
+    authenticator = getattr(request, "successful_authenticator", None)
+    if authenticator is not None:
+        from rest_framework.authentication import SessionAuthentication  # noqa: PLC0415
+
+        if not isinstance(authenticator, SessionAuthentication):
+            return False
+    if getattr(request, "auth", None) is not None:
+        return False  # token or bearer credentials (DRF sets request.auth)
+    session = getattr(request, "session", None)
+    if session is None:
+        return False
+    from allauth.account.internal.flows.login import get_authentication_records  # noqa: PLC0415
+
+    records = get_authentication_records(request, request.user)
+    return any(record.get("method") == "mfa" for record in records)
+
+
+def is_tenant_admin_anywhere(user: AnyUser) -> bool:
+    """Superuser, or an active Tenant Administrator of at least one active Tenant."""
+    if not _user_ok(user):
+        return False
+    if is_superuser(user):
+        return True
+    return TenantMembership.objects.filter(
+        user=user,
+        role=TenantRole.ADMIN,
+        status=MembershipStatus.ACTIVE,
+        tenant__is_active=True,
+    ).exists()
+
+
+def admin_mfa_missing(request: HttpRequest) -> bool:
+    """True: the user administers a Tenant but this request has not passed MFA."""
+    return is_tenant_admin_anywhere(request.user) and not request_passed_mfa(request)
+
+
+def raise_mfa_required() -> None:
+    """403 ``mfa_required`` (the frontend shows the "set up / confirm MFA" state)."""
+    from nekkoguard.security.exceptions import MFARequired  # noqa: PLC0415
+
+    raise MFARequired
+
+
+def ensure_request_mfa(request: HttpRequest) -> None:
+    """Platform-level privileged operations (staff): an MFA-verified session only."""
+    if not request_passed_mfa(request):
+        raise_mfa_required()
+
+
+def tenant_access_for(request: HttpRequest, tenant: Tenant) -> TenantAccess | None:
+    """
+    The effective Tenant access of a request — what every API uses.
+
+    Tenant administration (anything beyond the Member rights) needs a request that
+    passed MFA (``request_passed_mfa``). Without it an Administrator — superusers
+    included — has exactly the rights of a Tenant Member here; ``role_permissions``
+    keeps what was withheld so the API can answer ``mfa_required``.
+    """
+    role_access = get_tenant_access(request.user, tenant)
+    if role_access is None:
+        return None
+    effective = effective_tenant_permissions(
+        role_access.permissions,
+        passed_mfa=lambda: request_passed_mfa(request),
+    )
+    if effective == role_access.permissions:
+        return role_access
+    return TenantAccess(
+        tenant=tenant,
+        membership=role_access.membership,
+        permissions=effective,
+        role_permissions=role_access.permissions,
+    )
+
+
+def effective_tenant_permissions(
+    role_permissions: frozenset[TenantPermission],
+    *,
+    passed_mfa: Callable[[], bool],
+) -> frozenset[TenantPermission]:
+    """Role rights, or only the Member rights when the request has not passed MFA."""
+    member = tenant_permissions_for(TenantRole.MEMBER)
+    if role_permissions <= member or passed_mfa():
+        return role_permissions
+    return role_permissions & member
+
+
 def get_tenant_access(user: AnyUser, tenant: Tenant) -> TenantAccess | None:
+    """
+    Tenant access by role only, ignoring authentication assurance. For services,
+    tasks and tests; request handling uses ``tenant_access_for``.
+    """
     if not _user_ok(user) or not tenant.is_active:
         return None
     if is_superuser(user):
@@ -338,6 +474,30 @@ def get_organization_access(
         membership=membership,
         via_tenant=via_tenant,
         overrides=overrides,
+    )
+
+
+def organization_access_for(
+    request: HttpRequest,
+    organization: Organization,
+) -> OrganizationContext | None:
+    """
+    The effective Organization access of a request — what every API uses.
+
+    Rights from memberships, roles and overrides are the same however the request
+    is authenticated. A superuser's blanket rights are platform privilege: without a
+    request that passed MFA they keep only the read rights every role has.
+    """
+    context = get_organization_access(request.user, organization)
+    if context is None or not is_superuser(request.user) or request_passed_mfa(request):
+        return context
+    withheld = frozenset(Permission) - READ_PERMISSIONS
+    return replace(
+        context,
+        decisions={
+            p: Decision(p, p in READ_PERMISSIONS, Source.SUPERUSER) for p in Permission
+        },
+        mfa_withheld=withheld,
     )
 
 

@@ -44,7 +44,6 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from nekkoguard.organizations import access
@@ -64,6 +63,7 @@ from nekkoguard.organizations.models import TenantMembership
 from nekkoguard.organizations.roles import OrganizationAccess
 from nekkoguard.organizations.roles import Permission
 from nekkoguard.organizations.roles import TenantPermission
+from nekkoguard.security.throttling import SensitiveThrottleMixin
 from nekkoguard.users.frontend import frontend_url
 
 from .permissions import SCOPED_PERMISSIONS
@@ -159,12 +159,15 @@ ACTIVITY_ORDERING = {
 
 
 class TenantViewSet(
+    SensitiveThrottleMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
     viewsets.GenericViewSet,
 ):
     """Tenants I am a member of, or reach an Organization in."""
+
+    throttle_scope = "admin_changes"
 
     serializer_class = TenantSerializer
     permission_classes = [IsAuthenticated]
@@ -193,7 +196,11 @@ class TenantViewSet(
 
     def update(self, request: Request, *args, **kwargs) -> Response:
         # Check before validating: non-managers learn nothing from validation errors.
-        tenant_access = access.get_tenant_access(request.user, self.get_object())
+        tenant_access = access.tenant_access_for(request, self.get_object())
+        if tenant_access is not None and tenant_access.withheld_by_mfa(
+            TenantPermission.MANAGE,
+        ):
+            access.raise_mfa_required()
         if tenant_access is None or not tenant_access.can(TenantPermission.MANAGE):
             raise PermissionDenied
         return super().update(request, *args, **kwargs)
@@ -236,6 +243,7 @@ class MyOrganizationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     ),
 )
 class TenantMemberViewSet(
+    SensitiveThrottleMixin,
     TenantScopedMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -245,6 +253,8 @@ class TenantMemberViewSet(
     viewsets.GenericViewSet,
 ):
     """Tenant memberships, including each member's Organization access policy."""
+
+    throttle_scope = "access_changes"
 
     serializer_class = TenantMembershipSerializer
     permission_classes = SCOPED_PERMISSIONS
@@ -363,6 +373,7 @@ class TenantActivityViewSet(
 
 @_schema(TENANT_PARAM)
 class TenantOrganizationViewSet(
+    SensitiveThrottleMixin,
     TenantScopedMixin,
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
@@ -373,6 +384,8 @@ class TenantOrganizationViewSet(
     organization managers — those in their organization scope (``can_administer``;
     ``has_access`` tells whether they also reach the infrastructure).
     """
+
+    throttle_scope = "admin_changes"
 
     serializer_class = OrganizationSerializer
     permission_classes = SCOPED_PERMISSIONS
@@ -435,11 +448,14 @@ class _OrganizationViewSet(OrganizationScopedMixin, viewsets.GenericViewSet):
 
 @_schema(TENANT_PARAM, ORG_PARAM)
 class OrganizationDetailViewSet(
+    SensitiveThrottleMixin,
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
     _OrganizationViewSet,
 ):
     """One Organization, with the caller's effective permissions in ``my_access``."""
+
+    throttle_scope = "admin_changes"
 
     serializer_class = OrganizationDetailSerializer
     http_method_names = ["get", "patch", "head", "options"]
@@ -466,6 +482,10 @@ class OrganizationDetailViewSet(
         context["can_administer"] = self.tenant_access is not None and any(
             self.tenant_access.can(p) for p in TENANT_ADMINISTRATION
         )
+        organization_context = self.organization_context
+        context["mfa_required"] = (
+            self.tenant_access is not None and self.tenant_access.mfa_required
+        ) or (organization_context is not None and organization_context.mfa_required)
         return context
 
     def perform_update(self, serializer: BaseSerializer) -> None:
@@ -494,6 +514,7 @@ class OrganizationDetailViewSet(
     ),
 )
 class OrganizationMemberViewSet(
+    SensitiveThrottleMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
@@ -522,9 +543,10 @@ class OrganizationMemberViewSet(
         ).select_related("user", "organization__tenant")
 
     def get_throttles(self):
-        if self.action == "create":
-            self.throttle_scope = "member_invitations"
-            return [ScopedRateThrottle()]
+        # Adding (which may email an invitation) vs changing / removing members.
+        self.throttle_scope = (
+            "member_invitations" if self.action == "create" else "access_changes"
+        )
         return super().get_throttles()
 
     @extend_schema(
@@ -565,6 +587,7 @@ def invitation_link(request: Request, token: str) -> str:
 
 @_schema(TENANT_PARAM, ORG_PARAM)
 class OrganizationInvitationViewSet(
+    SensitiveThrottleMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.DestroyModelMixin,
@@ -594,9 +617,9 @@ class OrganizationInvitationViewSet(
         ).select_related("invited_by")
 
     def get_throttles(self):
-        if self.action == "resend":
-            self.throttle_scope = "member_invitations"
-            return [ScopedRateThrottle()]
+        self.throttle_scope = (
+            "member_invitations" if self.action == "resend" else "access_changes"
+        )
         return super().get_throttles()
 
     def perform_destroy(self, instance: OrganizationInvitation) -> None:
@@ -617,7 +640,7 @@ class OrganizationInvitationViewSet(
         return Response(OrganizationInvitationSerializer(invitation).data)
 
 
-class InvitationLinkView(APIView):
+class InvitationLinkView(SensitiveThrottleMixin, APIView):
     """
     GET /api/invitations/{token}/ — public: what the emailed link is about. Only a
     pending invitation reveals its Organization and inviter; any other state
@@ -625,8 +648,8 @@ class InvitationLinkView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
     throttle_scope = "invitation_links"
+    sensitive_methods = None  # anonymous lookups of secret links: always limited
 
     @extend_schema(responses=OpenApiTypes.OBJECT)
     def get(self, request: Request, token: str) -> Response:
@@ -652,11 +675,10 @@ class InvitationLinkView(APIView):
         )
 
 
-class InvitationAcceptView(APIView):
+class InvitationAcceptView(SensitiveThrottleMixin, APIView):
     """POST /api/invitations/{token}/accept/ — by the owner of the invited address."""
 
     permission_classes = [IsAuthenticated]
-    throttle_classes = [ScopedRateThrottle]
     throttle_scope = "invitation_links"
 
     @extend_schema(request=None, responses=OpenApiTypes.OBJECT)
@@ -689,6 +711,7 @@ class InvitationAcceptView(APIView):
     ),
 )
 class PermissionOverrideViewSet(
+    SensitiveThrottleMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
@@ -697,6 +720,8 @@ class PermissionOverrideViewSet(
     _OrganizationViewSet,
 ):
     """Explicit GRANT/DENY per user. POST upserts; DELETE returns to INHERIT."""
+
+    throttle_scope = "access_changes"
 
     serializer_class = PermissionOverrideSerializer
     required_permissions: ClassVar[dict[str, Requirement]] = {
