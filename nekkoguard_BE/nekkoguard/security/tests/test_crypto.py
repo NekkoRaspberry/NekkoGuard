@@ -157,11 +157,13 @@ class TestEncryptedField:
             app_password="app-pass-123",
         )
         loaded = credential_model.objects.get(pk=row.pk)
+        masked_repr = repr(loaded.app_password)
+        masked_str = str(loaded.app_password)
         with caplog.at_level(logging.INFO):
             logging.getLogger("test").info(
                 "connection %r %s %s",
-                loaded.app_password,
-                loaded.app_password,
+                masked_repr,
+                masked_str,
                 vars(loaded),
             )
         assert "app-pass-123" not in caplog.text
