@@ -86,11 +86,18 @@ describe('organizationCapabilities (presentation of backend permissions)', () =>
 });
 
 describe('visibleNavigation', () => {
-  const base: NavAccess = { permissions: NONE, hasOrganization: false, canAdministerTenant: false };
+  const base: NavAccess = { permissions: NONE, hasOrganization: false, canAdministerTenant: false, canReportBugs: true };
   const labels = (access: NavAccess) => visibleNavigation(access).flatMap((g) => g.items.map((i) => i.label));
 
-  it('shows only Overview and Profile to a user without tenancy access', () => {
-    expect(labels(base)).toEqual(['Overview', 'Profile']);
+  it('shows only Overview, Profile and Software to a user without tenancy access', () => {
+    expect(labels(base)).toEqual(['Overview', 'Profile', 'Release versions', 'Terms of service', 'Report a bug']);
+  });
+
+  it('Software sits under Settings; Report a bug is hidden while viewing as someone else', () => {
+    const groups = visibleNavigation(base).map((g) => g.label);
+    expect(groups.indexOf('Software')).toBe(groups.indexOf('Settings') + 1);
+    expect(labels({ ...base, canReportBugs: false })).not.toContain('Report a bug');
+    expect(labels({ ...base, canReportBugs: false })).toContain('Release versions');
   });
 
   it('orders Settings as Tenant, Organization, Profile', () => {
@@ -101,8 +108,8 @@ describe('visibleNavigation', () => {
   });
 
   it('has no Platform, Configuration or Account groups', () => {
-    const all = { permissions: new Set(['sites.view']), hasOrganization: true, canAdministerTenant: true };
-    expect(visibleNavigation(all).map((g) => g.label)).toEqual(['General', 'Infrastructure', 'Settings']);
+    const all = { permissions: new Set(['sites.view']), hasOrganization: true, canAdministerTenant: true, canReportBugs: true };
+    expect(visibleNavigation(all).map((g) => g.label)).toEqual(['General', 'Infrastructure', 'Settings', 'Software']);
   });
 
   it('shows Sites & networks only with a view permission', () => {

@@ -5,6 +5,8 @@ import { Logo } from '@/components/Logo/Logo';
 import { config } from '@/config/env';
 import { cx } from '@/lib/cx';
 import { useEffectiveAppearance } from '@/features/appearance/hooks';
+import { useBugReport } from '@/features/help/useBugReport';
+import { isLinkItem, navItemKey } from '../navigation';
 import { useNavigation } from '../useNavigation';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import styles from './Sidebar.module.css';
@@ -29,6 +31,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed, canToggle = true, onToggleCollapsed, mobileOpen, onCloseMobile, placement = 'left' }: SidebarProps) {
   const { title, logoUrl } = useEffectiveAppearance();
   const navigation = useNavigation();
+  const { openBugReport } = useBugReport();
   const ExpandIcon = placement === 'right' ? ChevronsLeft : ChevronsRight;
   const CollapseIcon = placement === 'right' ? ChevronsRight : ChevronsLeft;
 
@@ -64,20 +67,42 @@ export function Sidebar({ collapsed, canToggle = true, onToggleCollapsed, mobile
             <div key={group.label} className={styles.group}>
               <p className={styles.groupLabel}>{group.label}</p>
               <ul className={styles.list}>
-                {group.items.map(({ label, to, icon: Icon, end }) => (
-                  <li key={to}>
-                    <NavLink
-                      to={to}
-                      end={end ?? false}
-                      className={({ isActive }) => cx(styles.item, isActive && styles.active)}
-                      title={collapsed ? label : undefined}
-                      onClick={onCloseMobile}
-                    >
+                {group.items.map((item) => {
+                  const { label, icon: Icon } = item;
+                  const content = (
+                    <>
                       <Icon size={18} className={styles.itemIcon} aria-hidden="true" />
                       <span className={styles.itemLabel}>{label}</span>
-                    </NavLink>
-                  </li>
-                ))}
+                    </>
+                  );
+                  return (
+                    <li key={navItemKey(item)}>
+                      {isLinkItem(item) ? (
+                        <NavLink
+                          to={item.to}
+                          end={item.end ?? false}
+                          className={({ isActive }) => cx(styles.item, isActive && styles.active)}
+                          title={collapsed ? label : undefined}
+                          onClick={onCloseMobile}
+                        >
+                          {content}
+                        </NavLink>
+                      ) : (
+                        <button
+                          type="button"
+                          className={cx(styles.item, styles.itemButton)}
+                          title={collapsed ? label : undefined}
+                          onClick={() => {
+                            onCloseMobile();
+                            if (item.action === 'reportBug') openBugReport();
+                          }}
+                        >
+                          {content}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
@@ -98,9 +123,9 @@ export function Sidebar({ collapsed, canToggle = true, onToggleCollapsed, mobile
               <span className={styles.itemLabel}>Collapse</span>
             </button>
           )}
-          <p className={styles.version} title={`NekkoGuard release ${config.appVersion}`}>
+          <Link className={styles.version} to={ROUTES.helpReleases} title={`NekkoGuard release ${config.appVersion} — release notes`}>
             {collapsed && !mobileOpen ? `v${config.appVersion}` : `NekkoGuard v${config.appVersion}`}
-          </p>
+          </Link>
         </div>
       </aside>
     </>

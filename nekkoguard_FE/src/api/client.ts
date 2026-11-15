@@ -15,6 +15,15 @@ const AUTH_FAILURE_MESSAGES = new Set([
 type SessionLostHandler = () => void;
 let sessionLostHandler: SessionLostHandler | null = null;
 
+/** Backend code of a 403 meaning "accept the Terms of Service first" (support/middleware.py). */
+export const TERMS_REQUIRED_CODE = 'terms_acceptance_required';
+let termsRequiredHandler: (() => void) | null = null;
+
+/** Registered by the TermsGate: any blocked request brings the acceptance screen back. */
+export function setTermsRequiredHandler(handler: (() => void) | null): void {
+  termsRequiredHandler = handler;
+}
+
 /** Registered by the AuthProvider: a lost session anywhere re-checks the auth state. */
 export function setSessionLostHandler(handler: SessionLostHandler | null): void {
   sessionLostHandler = handler;
@@ -29,6 +38,11 @@ export async function apiRequest<T>(path: string, options: HttpRequest = {}): Pr
   const { status, data } = await httpRequest(path, options);
 
   if (status >= 200 && status < 300) return data as T;
+
+  if (status === 403 && (data as { code?: unknown } | null)?.code === TERMS_REQUIRED_CODE) {
+    termsRequiredHandler?.();
+    throw new ApiError({ kind: 'http', status, message: 'Accept the Terms of Service to continue.' });
+  }
 
   const { message, fieldErrors } = parseDrfErrorBody(data);
   const isAuthFailure = status === 401 || (status === 403 && message !== null && AUTH_FAILURE_MESSAGES.has(message));

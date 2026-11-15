@@ -123,6 +123,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     "nekkoguard.users",
     "nekkoguard.organizations",
+    "nekkoguard.support",
     # Your stuff: custom apps go here
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
@@ -185,6 +186,8 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     # Superuser "view as user" (read-only): after authentication. See users/impersonation.py.
     "nekkoguard.users.impersonation.ImpersonationMiddleware",
+    # Tenant Terms of Service must be accepted before using the API. See support/middleware.py.
+    "nekkoguard.support.middleware.TermsAcceptanceMiddleware",
 ]
 
 # STATIC
@@ -286,6 +289,12 @@ FRONTEND_PORT = env.int("DJANGO_FRONTEND_PORT", default=8080)
 # ------------------------------------------------------------------------------
 # How long an emailed invitation link stays valid (resending starts a new period).
 ORGANIZATION_INVITATION_TTL_DAYS = env.int("DJANGO_INVITATION_TTL_DAYS", default=7)
+
+# BUG REPORTS
+# ------------------------------------------------------------------------------
+# Where bug reports go when the reporter's Tenant has no support email of its own.
+# Empty: such reports are stored (Django admin) but not emailed.
+BUG_REPORT_EMAIL = env("DJANGO_BUG_REPORT_EMAIL", default="")
 
 # ADMIN
 # ------------------------------------------------------------------------------
@@ -511,6 +520,8 @@ REST_FRAMEWORK = {
         "member_invitations": "60/hour",
         # Opening / accepting invitation links, per user or client address.
         "invitation_links": "60/hour",
+        # Bug reports, per user.
+        "bug_reports": "10/hour",
     },
 }
 

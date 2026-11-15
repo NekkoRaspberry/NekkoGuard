@@ -62,6 +62,9 @@ class Tenant(TimeStampedModel):
         blank=True,
     )
     is_active = models.BooleanField(_("active"), default=True)
+    #: Where this Tenant's bug reports are emailed (see ``nekkoguard.support``).
+    #: Empty: the platform address (``BUG_REPORT_EMAIL``) is used instead.
+    support_email = models.EmailField(_("support email"), blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

@@ -86,6 +86,11 @@ export function LoginPage() {
         }
       />
 
+      {lastSignOutReason === 'terms_declined' && !errors.form && (
+        <Banner tone="info" title="You have been signed out" className={styles.banner}>
+          Accepting the Terms of Service is required to use NekkoGuard. Sign in again whenever you are ready to accept them.
+        </Banner>
+      )}
       {lastSignOutReason === 'expired' && !errors.form && (
         <Banner tone="warning" title="Your session has ended" className={styles.banner}>
           Please sign in again to continue.

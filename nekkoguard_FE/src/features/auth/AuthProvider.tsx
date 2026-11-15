@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient],
   );
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (reason: SignOutReason = 'user') => {
     try {
       applySession(await allauth.logout());
     } catch {
@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.setQueryData<SessionEnvelope>(queryKeys.session, { status: 401, data: { flows: [] }, meta: { is_authenticated: false } });
       clearUserData(queryClient);
     }
-    setLastSignOutReason('user');
+    setLastSignOutReason(reason);
   }, [applySession, queryClient]);
 
   // Any API call that finds the session gone triggers a fresh session check.

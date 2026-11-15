@@ -1,0 +1,37 @@
+{% autoescape off %}New bug report from NekkoGuard
+
+Title: {{ report.title }}
+{% if severity %}Severity: {{ severity }}
+{% endif %}{% if category %}Category: {{ category }}
+{% endif %}
+Description
+{{ report.description }}
+{% if report.steps_to_reproduce %}
+Steps to reproduce
+{{ report.steps_to_reproduce }}
+{% endif %}{% if report.expected_behavior %}
+Expected behavior
+{{ report.expected_behavior }}
+{% endif %}{% if report.actual_behavior %}
+Actual behavior
+{{ report.actual_behavior }}
+{% endif %}{% if report.additional_comments %}
+Additional comments
+{{ report.additional_comments }}
+{% endif %}
+Context
+Reporter: {{ reporter }}
+{% if tenant_name %}Tenant: {{ tenant_name }}
+{% endif %}{% if organization_name %}Organization: {{ organization_name }}
+{% endif %}{% if report.page %}Page: {{ report.page }}
+{% endif %}NekkoGuard version: {{ report.app_version }}{% if report.client_version and report.client_version != report.app_version %} (frontend {{ report.client_version }}){% endif %}
+{% if report.browser %}Browser: {{ report.browser }}
+{% endif %}{% if report.operating_system %}Operating system: {{ report.operating_system }}
+{% endif %}{% if report.viewport %}Viewport: {{ report.viewport }}
+{% endif %}Submitted: {{ report.created_at|date:"j F Y, H:i T" }}
+Report ID: {{ report.id }}
+{% if report.attachment %}
+A screenshot is attached.
+{% endif %}
+Reply to this email to answer the reporter.
+{% endautoescape %}

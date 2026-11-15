@@ -6,6 +6,8 @@ from rest_framework.routers import SimpleRouter
 from nekkoguard.organizations.api import appearance
 from nekkoguard.organizations.api import views as organizations
 from nekkoguard.organizations.api.permissions import UUID_REGEX
+from nekkoguard.support.api import terms as tos
+from nekkoguard.support.api import views as support
 from nekkoguard.users.api.views import UserViewSet
 
 router = DefaultRouter() if settings.DEBUG else SimpleRouter()
@@ -112,5 +114,72 @@ appearance_urls = [
     ),
 ]
 
+# Software: release notes and bug reports (any signed-in user).
+support_urls = [
+    re_path(r"^help/releases/$", support.ReleasesView.as_view(), name="help-releases"),
+    re_path(r"^bug-reports/$", support.BugReportView.as_view(), name="bug-report"),
+]
+
+# Tenant Terms of Service. /api/terms/ stays reachable while acceptance is pending
+# (support/middleware.py); everything under a Tenant is checked against the caller.
+VERSION = rf"(?P<version_pk>{UUID_REGEX})"
+terms_urls = [
+    re_path(r"^terms/pending/$", tos.PendingTermsView.as_view(), name="terms-pending"),
+    re_path(r"^terms/decline/$", tos.DeclineTermsView.as_view(), name="terms-decline"),
+    re_path(
+        rf"^terms/{VERSION}/accept/$",
+        tos.AcceptTermsView.as_view(),
+        name="terms-accept",
+    ),
+    re_path(rf"^{TENANT}/terms/$", tos.TenantTermsView.as_view(), name="tenant-terms"),
+    re_path(
+        rf"^{TENANT}/terms/history/$",
+        tos.TermsHistoryView.as_view(),
+        name="tenant-terms-history",
+    ),
+    re_path(
+        rf"^{TENANT}/terms/history/{VERSION}/$",
+        tos.TermsHistoryDetailView.as_view(),
+        name="tenant-terms-history-version",
+    ),
+    re_path(
+        rf"^{TENANT}/terms/versions/$",
+        tos.TermsVersionListView.as_view(),
+        name="tenant-terms-versions",
+    ),
+    re_path(
+        rf"^{TENANT}/terms/versions/{VERSION}/$",
+        tos.TermsVersionDetailView.as_view(),
+        name="tenant-terms-version",
+    ),
+    re_path(
+        rf"^{TENANT}/terms/versions/{VERSION}/publish/$",
+        tos.PublishTermsView.as_view(),
+        name="tenant-terms-publish",
+    ),
+    re_path(
+        rf"^{TENANT}/terms/acceptances/$",
+        tos.TermsAcceptanceListView.as_view(),
+        name="tenant-terms-acceptances",
+    ),
+    re_path(
+        rf"^{TENANT}/terms/summary/$",
+        tos.TermsAcceptanceSummaryView.as_view(),
+        name="tenant-terms-summary",
+    ),
+    re_path(
+        rf"^{ORG}/terms/acceptances/$",
+        tos.OrganizationTermsAcceptanceView.as_view(),
+        name="organization-terms-acceptances",
+    ),
+    re_path(
+        rf"^{ORG}/terms/summary/$",
+        tos.OrganizationTermsSummaryView.as_view(),
+        name="organization-terms-summary",
+    ),
+]
+
 app_name = "api"
-urlpatterns = invitation_urls + appearance_urls + router.urls
+urlpatterns = (
+    invitation_urls + appearance_urls + support_urls + terms_urls + router.urls
+)

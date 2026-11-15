@@ -30,16 +30,21 @@ export const ROUTES = {
   tenantMembers: '/settings/tenant/members',
   tenantActivity: '/settings/tenant/activity',
   tenantAppearance: '/settings/tenant/appearance',
+  tenantTerms: '/settings/tenant/terms',
   // Settings → Organization (the Organization selected in the context bar)
   organizationSettings: '/settings/organization',
   organizationMembers: '/settings/organization/members',
   organizationAccess: '/settings/organization/access',
   organizationActivity: '/settings/organization/activity',
   organizationAppearance: '/settings/organization/appearance',
+  organizationTerms: '/settings/organization/terms',
   // Settings → Profile (the signed-in user; independent of Tenant/Organization)
   profile: '/settings/profile',
   security: '/settings/profile/security',
   connectedApps: '/settings/profile/applications',
+  // Help (any signed-in user; Report a bug is a dialog from the account menu)
+  helpReleases: '/help/releases',
+  helpTerms: '/help/terms',
 } as const;
 
 /** Former account URLs (bookmarks, older links) → their Settings → Profile page. */

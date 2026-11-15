@@ -1,11 +1,13 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, ChevronRight, Eye, LogOut, Undo2, UserRound } from 'lucide-react';
+import { Bug, ChevronDown, ChevronRight, Eye, FileText, LogOut, Rocket, Undo2, UserRound } from 'lucide-react';
+import { useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { ROUTES } from '@/app/routes';
 import { Avatar } from '@/components/Avatar/Avatar';
 import { Skeleton } from '@/components/Skeleton/Skeleton';
 import { useCurrentUser } from '@/features/account/hooks/useCurrentUser';
 import { useAuth } from '@/features/auth/useAuth';
+import { useBugReport } from '@/features/help/useBugReport';
 import { useImpersonation, useStopImpersonation } from '@/features/impersonation/useImpersonation';
 import { ViewAsList } from '@/features/impersonation/ViewAsList';
 import { cx } from '@/lib/cx';
@@ -18,6 +20,9 @@ export function UserMenu() {
   const impersonation = useImpersonation().data;
   const stop = useStopImpersonation();
   const navigate = useNavigate();
+  const { openBugReport } = useBugReport();
+  // Open the dialog only once the menu has closed (it would take the focus back).
+  const reportAfterClose = useRef(false);
 
   const email = user?.email ?? sessionUser?.email ?? '';
   const name = user?.name ?? '';
@@ -50,7 +55,17 @@ export function UserMenu() {
       </DropdownMenu.Trigger>
 
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className={styles.menu} align="end" sideOffset={8}>
+        <DropdownMenu.Content
+          className={styles.menu}
+          align="end"
+          sideOffset={8}
+          onCloseAutoFocus={(event) => {
+            if (!reportAfterClose.current) return;
+            reportAfterClose.current = false;
+            event.preventDefault();
+            openBugReport();
+          }}
+        >
           {impersonation?.available ? (
             // Superusers: the name opens the "view as user" switcher.
             <DropdownMenu.Sub>
@@ -78,6 +93,22 @@ export function UserMenu() {
               <UserRound size={16} /> Profile
             </DropdownMenu.Item>
           )}
+          <DropdownMenu.Separator className={styles.menuSeparator} />
+          <DropdownMenu.Group aria-label="Software">
+            <DropdownMenu.Label className={styles.menuLabel}>Software</DropdownMenu.Label>
+            <DropdownMenu.Item className={styles.menuItem} onSelect={() => navigate(ROUTES.helpReleases)}>
+              <Rocket size={16} /> Release versions
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className={styles.menuItem} onSelect={() => navigate(ROUTES.helpTerms)}>
+              <FileText size={16} /> Terms of service
+            </DropdownMenu.Item>
+            {/* Viewing as someone else is read-only: reports are sent as yourself. */}
+            {!viewing && (
+              <DropdownMenu.Item className={styles.menuItem} onSelect={() => (reportAfterClose.current = true)}>
+                <Bug size={16} /> Report a bug
+              </DropdownMenu.Item>
+            )}
+          </DropdownMenu.Group>
           <DropdownMenu.Separator className={styles.menuSeparator} />
           <DropdownMenu.Item className={`${styles.menuItem} ${styles.menuDanger}`} onSelect={() => void signOut()}>
             <LogOut size={16} /> Sign out

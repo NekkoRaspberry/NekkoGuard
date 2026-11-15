@@ -90,6 +90,7 @@ export function TenantSettingsLayout() {
     links.push({ label: 'Organizations', to: ROUTES.tenantOrganizations });
     if (tenantPermissions.has(TENANT_PERMISSIONS.manageMembers)) links.push({ label: 'Members', to: ROUTES.tenantMembers });
     if (tenantPermissions.has(TENANT_PERMISSIONS.viewActivity)) links.push({ label: 'Activity', to: ROUTES.tenantActivity });
+    if (tenantPermissions.has(TENANT_PERMISSIONS.manage)) links.push({ label: 'Terms of Service', to: ROUTES.tenantTerms });
     if (canManageTenantAppearance(tenantPermissions, isPlatformAdmin)) {
       links.push({ label: 'Appearance', to: ROUTES.tenantAppearance });
     }
@@ -109,6 +110,7 @@ export function OrganizationSettingsLayout() {
       links.push({ label: 'Permissions', to: ROUTES.organizationAccess });
     }
     if (can.canViewActivity) links.push({ label: 'Activity', to: ROUTES.organizationActivity });
+    if (can.canViewAccess) links.push({ label: 'Terms of Service', to: ROUTES.organizationTerms });
     // Tenant rights count here only if the Organization is in the caller's scope.
     const tenantRights = currentOrganization.can_administer ? tenantPermissions : new Set<string>();
     if (canManageOrganizationAppearance(permissions, tenantRights, isPlatformAdmin)) {

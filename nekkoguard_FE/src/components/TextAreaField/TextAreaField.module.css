@@ -1,0 +1,28 @@
+/* Grows with its rows instead of TextField's fixed 38px height. */
+.control {
+  height: auto;
+  align-items: stretch;
+}
+
+.textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 72px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: vertical;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+.textarea:focus-visible {
+  box-shadow: none;
+}
+
+.textarea::placeholder {
+  color: var(--text-muted);
+}

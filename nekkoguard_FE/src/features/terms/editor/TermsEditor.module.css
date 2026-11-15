@@ -1,0 +1,219 @@
+/* Terms of Service editor. Tokens only; the editing surface mirrors the reader. */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.editor:focus-within {
+  border-color: var(--border-strong);
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: var(--space-2);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.group:last-child {
+  border-right: none;
+}
+
+.tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.tool:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+
+.tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.toolActive,
+.toolActive:hover:not(:disabled) {
+  background: var(--primary-subtle);
+  color: var(--primary-hover);
+}
+
+.textTool {
+  height: 30px;
+  padding: 0 var(--space-2);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+
+.textTool:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+
+.blockSelect {
+  height: 30px;
+  padding: 0 var(--space-2);
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-small);
+}
+
+.surface {
+  padding: var(--space-6) var(--space-8);
+}
+
+@media (max-width: 639px) {
+  .surface {
+    padding: var(--space-4);
+  }
+}
+
+/* ProseMirror content: same typography as the reader (TermsDocument.module.css). */
+.content {
+  max-width: 760px;
+  min-height: 360px;
+  outline: none;
+  font-size: 15px;
+  line-height: 26px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.content :global(p) {
+  margin: 0 0 var(--space-3);
+}
+
+.content :global(h1),
+.content :global(h2),
+.content :global(h3) {
+  margin: var(--space-6) 0 var(--space-3);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.content :global(h1) {
+  font-size: var(--fs-h2);
+  line-height: 24px;
+}
+
+.content :global(h2) {
+  font-size: var(--fs-h3);
+  line-height: 22px;
+}
+
+.content :global(h3) {
+  font-size: var(--fs-body);
+  line-height: 20px;
+}
+
+.content > :global(:first-child) {
+  margin-top: 0;
+}
+
+.content :global(ul),
+.content :global(ol) {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-6);
+}
+
+.content :global(li > p) {
+  margin-bottom: var(--space-1);
+}
+
+.content :global(blockquote) {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-1) var(--space-4);
+  border-left: 3px solid var(--border-strong);
+}
+
+.content :global(hr) {
+  margin: var(--space-6) 0;
+  border: none;
+  border-top: 1px solid var(--border-default);
+}
+
+.content :global(hr.ProseMirror-selectednode) {
+  border-top-color: var(--primary);
+}
+
+.content :global(a) {
+  color: var(--primary-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.content :global(table) {
+  width: 100%;
+  margin: 0 0 var(--space-4);
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--fs-small);
+}
+
+.content :global(th),
+.content :global(td) {
+  position: relative;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  vertical-align: top;
+}
+
+.content :global(th) {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.content :global(td p),
+.content :global(th p) {
+  margin: 0;
+}
+
+.content :global(.selectedCell)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--primary-subtle);
+  pointer-events: none;
+}
+
+.content :global(.tableWrapper) {
+  overflow-x: auto;
+}

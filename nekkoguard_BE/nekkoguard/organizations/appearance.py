@@ -162,44 +162,58 @@ class ProcessedImage:
     hash: str
 
 
-def _invalid(message: str) -> ValidationError:
-    return ValidationError({"file": [message]})
+def _invalid(message: str, field: str = "file") -> ValidationError:
+    return ValidationError({field: [message]})
 
 
-def process_image(upload: UploadedFile, asset: str) -> ProcessedImage:
+def decode_image(
+    upload: UploadedFile,
+    *,
+    max_bytes: int = MAX_UPLOAD_BYTES,
+    field: str = "file",
+) -> Image.Image:
     """
-    Validate an uploaded logo/favicon and re-encode it as a fresh PNG.
+    Validate an uploaded PNG/JPEG/WebP image and return its decoded RGBA pixels.
 
     Checks extension, declared content type, real file contents (Pillow decodes it)
-    and size. Re-encoding drops metadata and anything hidden in the original file;
-    only the decoded pixels are kept.
+    and size. Callers re-encode the pixels, which drops metadata and anything hidden
+    in the original file. Also used for bug report screenshots (``support``).
     """
-    if upload.size is None or upload.size > MAX_UPLOAD_BYTES:
-        raise _invalid(_("The image must be 1 MB or smaller."))
+    too_big = _("The image must be %(size)s MB or smaller.") % {
+        "size": max_bytes // (1024 * 1024),
+    }
+    if upload.size is None or upload.size > max_bytes:
+        raise _invalid(too_big, field)
     expected = ALLOWED_EXTENSIONS.get(PurePath(upload.name or "").suffix.lower())
     if expected is None:
-        raise _invalid(_("Upload a PNG, JPEG or WebP image."))
+        raise _invalid(_("Upload a PNG, JPEG or WebP image."), field)
     content_type = (upload.content_type or "").split(";")[0].strip().lower()
     if content_type not in ALLOWED_CONTENT_TYPES[expected]:
-        raise _invalid(_("The file type does not match its extension."))
+        raise _invalid(_("The file type does not match its extension."), field)
 
-    raw = upload.read(MAX_UPLOAD_BYTES + 1)
-    if len(raw) > MAX_UPLOAD_BYTES:
-        raise _invalid(_("The image must be 1 MB or smaller."))
+    raw = upload.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise _invalid(too_big, field)
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(io.BytesIO(raw)) as probe:
                 if probe.format != expected:
-                    raise _invalid(_("The file contents do not match its extension."))
+                    raise _invalid(
+                        _("The file contents do not match its extension."),
+                        field,
+                    )
                 width, height = probe.size
                 if width * height > MAX_SOURCE_PIXELS:
-                    raise _invalid(_("The image is too large (max 4096 x 4096)."))
+                    raise _invalid(
+                        _("The image is too large (max 4096 x 4096)."),
+                        field,
+                    )
                 probe.verify()  # structural check; the image must be reopened after
             with Image.open(io.BytesIO(raw)) as image:
                 image.seek(0)  # first frame only (animated images)
                 image.load()
-                pixels = image.convert("RGBA")
+                return image.convert("RGBA")
     except ValidationError:
         raise
     except (
@@ -210,7 +224,12 @@ def process_image(upload: UploadedFile, asset: str) -> ProcessedImage:
         Image.DecompressionBombError,
         Image.DecompressionBombWarning,
     ):
-        raise _invalid(_("The file is not a valid image.")) from None
+        raise _invalid(_("The file is not a valid image."), field) from None
+
+
+def process_image(upload: UploadedFile, asset: str) -> ProcessedImage:
+    """Validate an uploaded logo/favicon and re-encode it as a fresh PNG."""
+    pixels = decode_image(upload)
 
     if asset == "favicon":
         # Square canvas, image centered without distortion.

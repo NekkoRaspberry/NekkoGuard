@@ -24,7 +24,7 @@ const tenantAdmin = [
 describe('settings areas are separated by context', () => {
   it('Tenant settings list only tenant pages, appearance included for Appearance Admins', () => {
     renderWith(<TenantSettingsLayout />, { tenancy: tenancyFor({ tenantPermissions: tenantAdmin, orgPermissions: [] }) });
-    expect(links('Acme')).toEqual(['Details', 'Organizations', 'Members', 'Activity', 'Appearance']);
+    expect(links('Acme')).toEqual(['Details', 'Organizations', 'Members', 'Activity', 'Terms of Service', 'Appearance']);
   });
 
   it('Tenant settings list nothing to manage for non-administrators', () => {
@@ -47,7 +47,7 @@ describe('settings areas are separated by context', () => {
       orgPermissions: ['members.manage', 'activity.view', 'organization.appearance.manage'],
     });
     renderWith(<OrganizationSettingsLayout />, { tenancy });
-    expect(links('Acme HQ')).toEqual(['Details', 'Members', 'Permissions', 'Activity', 'Appearance']);
+    expect(links('Acme HQ')).toEqual(['Details', 'Members', 'Permissions', 'Activity', 'Terms of Service', 'Appearance']);
   });
 
   it('Viewers see Members, Permissions and Activity of the organization (read-only)', () => {
@@ -56,7 +56,7 @@ describe('settings areas are separated by context', () => {
       orgPermissions: ['sites.view', 'networks.view', 'members.view', 'activity.view'],
     });
     renderWith(<OrganizationSettingsLayout />, { tenancy });
-    expect(links('Acme HQ')).toEqual(['Details', 'Members', 'Permissions', 'Activity']);
+    expect(links('Acme HQ')).toEqual(['Details', 'Members', 'Permissions', 'Activity', 'Terms of Service']);
   });
 
   it('Organization appearance is offered to the Tenant Appearance Admin too', () => {

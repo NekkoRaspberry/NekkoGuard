@@ -9,6 +9,8 @@ import { RealtimeProvider } from '@/features/system/RealtimeProvider';
 import { TenancyProvider } from '@/features/tenancy/TenancyProvider';
 import { AppearanceProvider } from '@/features/appearance/AppearanceProvider';
 import { useEffectiveAppearance } from '@/features/appearance/hooks';
+import { BugReportProvider } from '@/features/help/BugReportProvider';
+import { TermsGate } from '@/features/terms/TermsGate';
 import { ImpersonationBanner } from '@/features/impersonation/ImpersonationBanner';
 import { cx } from '@/lib/cx';
 import { useLocalStorageBoolean } from '@/hooks/useLocalStorageState';
@@ -92,6 +94,7 @@ export function ShellFrame() {
 
 export function AppShell() {
   return (
+    <TermsGate>
     <RealtimeProvider>
       <TenancyProvider>
       <AppearanceProvider>
@@ -99,10 +102,13 @@ export function AppShell() {
       <a href="#main-content" className={styles.skipLink}>
         Skip to content
       </a>
-      <ShellFrame />
+      <BugReportProvider>
+        <ShellFrame />
+      </BugReportProvider>
       </ReauthProvider>
       </AppearanceProvider>
       </TenancyProvider>
     </RealtimeProvider>
+    </TermsGate>
   );
 }

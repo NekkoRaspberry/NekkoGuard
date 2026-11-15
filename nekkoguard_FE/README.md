@@ -23,6 +23,10 @@ The frontend reflects what the backend implements today (user accounts and multi
 | Settings → Profile → Personal information | `/settings/profile` | `GET /api/users/me/`, `PATCH /api/users/{pk}/` (`name`) |
 | Settings → Profile → Security | `/settings/profile/security` | `…/account/password/change`, `…/account/email`, `…/account/authenticators/*` (TOTP, recovery codes), `DELETE …/auth/session` |
 | Settings → Profile → Connected applications | `/settings/profile/applications` | `/api/oauth/authorized-apps/` (all users), `/api/oauth/applications/` (staff), consent page `/o/authorize/` |
+| Software → Release versions | `/help/releases` | `GET /api/help/releases/` |
+| Software → Terms of service (selected Tenant; editor, history and acceptance for Tenant administrators) | `/help/terms` | `/api/tenants/{t}/terms/` (+ `versions/`, `versions/{v}/publish/`, `acceptances/`) |
+| Mandatory Terms acceptance (before the app, whenever pending) | — | `GET /api/terms/pending/`, `POST /api/terms/{v}/accept/`, `POST /api/terms/decline/` |
+| Software → Report a bug (dialog; sidebar or account menu) | — | `POST /api/bug-reports/` |
 | Google / GitHub / LinkedIn sign-in | `/login`, `/auth/callback`, `/signup/provider` | allauth provider flow; buttons appear only for providers configured in the backend env |
 
 Old `/account/*` URLs redirect to their Settings → Profile page. Platform administration (creating and deactivating Tenants) is not part of the web app: use Django admin.

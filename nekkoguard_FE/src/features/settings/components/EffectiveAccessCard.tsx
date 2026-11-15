@@ -168,7 +168,7 @@ export function EffectiveAccessCard({ scope, canManage }: { scope: Scope; canMan
   const columns: Column<EffectiveAccessDto>[] = [
     {
       key: 'user',
-      header: 'Person',
+      header: 'User',
       sortValue: (a) => displayName(a),
       exportValue: (a) => (a.user.name ? `${a.user.name} (${a.user.email})` : a.user.email),
       render: (a) => (

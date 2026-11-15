@@ -1,4 +1,4 @@
-import { Building2, Layers, LayoutDashboard, MapPin, UserRound, type LucideIcon } from 'lucide-react';
+import { Bug, Building2, FileText, Layers, LayoutDashboard, MapPin, Rocket, UserRound, type LucideIcon } from 'lucide-react';
 import { ROUTES } from '@/app/routes';
 import { PERMISSIONS } from '@/features/tenancy/model';
 
@@ -8,17 +8,36 @@ export interface NavAccess {
   hasOrganization: boolean;
   /** Tenant administrator (see canAdministerTenant). */
   canAdministerTenant: boolean;
+  /** False while viewing as another user (read-only: reports are sent as yourself). */
+  canReportBugs: boolean;
 }
 
-export interface NavItem {
+interface NavItemBase {
   label: string;
-  to: string;
   icon: LucideIcon;
-  /** Match only the exact path (needed for "/"). */
-  end?: boolean;
   /** Hidden when this returns false. The backend still enforces access. */
   visible?: (access: NavAccess) => boolean;
 }
+
+/** A page. */
+export interface NavLinkItem extends NavItemBase {
+  kind?: 'link';
+  to: string;
+  /** Match only the exact path (needed for "/"). */
+  end?: boolean;
+}
+
+/** Opens something in place instead of a page (e.g. the Report a bug dialog). */
+export type NavAction = 'reportBug';
+export interface NavActionItem extends NavItemBase {
+  kind: 'action';
+  action: NavAction;
+}
+
+export type NavItem = NavLinkItem | NavActionItem;
+
+export const isLinkItem = (item: NavItem): item is NavLinkItem => item.kind !== 'action';
+export const navItemKey = (item: NavItem): string => (isLinkItem(item) ? item.to : `action:${item.action}`);
 
 export interface NavGroup {
   label: string;
@@ -33,6 +52,8 @@ export interface NavGroup {
  * selected Organization, and the signed-in user's Profile. Each opens its own settings
  * area (with its own pages, e.g. Appearance or Security); nothing is duplicated here.
  * Platform administration (creating/deactivating Tenants) is Django admin only.
+ *
+ * Software: about NekkoGuard itself (release notes, terms) and reporting a bug.
  */
 export const NAVIGATION: NavGroup[] = [
   {
@@ -67,6 +88,20 @@ export const NAVIGATION: NavGroup[] = [
         visible: ({ hasOrganization }) => hasOrganization,
       },
       { label: 'Profile', to: ROUTES.profile, icon: UserRound },
+    ],
+  },
+  {
+    label: 'Software',
+    items: [
+      { label: 'Release versions', to: ROUTES.helpReleases, icon: Rocket },
+      { label: 'Terms of service', to: ROUTES.helpTerms, icon: FileText },
+      {
+        label: 'Report a bug',
+        kind: 'action',
+        action: 'reportBug',
+        icon: Bug,
+        visible: ({ canReportBugs }) => canReportBugs,
+      },
     ],
   },
 ];

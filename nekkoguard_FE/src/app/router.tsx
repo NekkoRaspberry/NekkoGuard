@@ -4,6 +4,7 @@ import type * as AppearancePages from '@/features/appearance/pages/AppearancePag
 import type * as SettingsLayouts from '@/features/settings/SettingsLayout';
 import type * as OrganizationSettingsPages from '@/features/settings/pages/OrganizationSettingsPages';
 import type * as TenantSettingsPages from '@/features/settings/pages/TenantSettingsPages';
+import type * as TermsAcceptancePages from '@/features/terms/pages/TermsAcceptancePages';
 import { AppShell } from '@/layout/AppShell/AppShell';
 import type { Crumb, RouteHandle } from '@/layout/TopBar/TopBar';
 import { NotFoundPage } from '@/pages/NotFoundPage';
@@ -17,6 +18,7 @@ const SETTINGS_CRUMB: Crumb = { label: 'Settings', to: ROUTES.settings };
 const TENANT_CRUMB: Crumb = { label: 'Tenant', to: ROUTES.tenantSettings };
 const ORGANIZATION_CRUMB: Crumb = { label: 'Organization', to: ROUTES.organizationSettings };
 const PROFILE_CRUMB: Crumb = { label: 'Profile', to: ROUTES.profile };
+const SOFTWARE_CRUMB: Crumb = { label: 'Software', to: ROUTES.helpReleases };
 
 /**
  * A settings page: breadcrumb Settings › area › page, and the page header (rendered
@@ -38,6 +40,8 @@ const tenantSettings = (name: TenantSettingsPage) =>
   page(async () => ({ Component: (await import('@/features/settings/pages/TenantSettingsPages'))[name] }));
 const appearancePage = (name: keyof typeof AppearancePages) =>
   page(async () => ({ Component: (await import('@/features/appearance/pages/AppearancePage'))[name] }));
+const termsAcceptancePage = (name: keyof typeof TermsAcceptancePages) =>
+  page(async () => ({ Component: (await import('@/features/terms/pages/TermsAcceptancePages'))[name] }));
 const settingsLayout = (name: keyof typeof SettingsLayouts) =>
   page(async () => ({ Component: (await import('@/features/settings/SettingsLayout'))[name] }));
 
@@ -64,6 +68,8 @@ const authPages = {
  *  - /settings/profile       → GET /api/users/me/, PATCH /api/users/{pk}/
  *  - /settings/profile/security     → allauth account endpoints (password, emails, 2FA, providers)
  *  - /settings/profile/applications → OAuth2 authorized/registered applications
+ *  - /help/releases               → /api/help/releases/ (Report a bug: POST /api/bug-reports/)
+ *  - /help/terms                  → /api/tenants/{t}/terms/ (+ versions/, acceptances/ for administrators)
  * Platform administration (creating/deactivating Tenants) is not part of this app: it
  * is done in Django admin.
  */
@@ -161,6 +167,11 @@ export const router = createBrowserRouter([
                         ...tenantSettings('TenantActivityPage'),
                       },
                       {
+                        path: ROUTES.tenantTerms,
+                        handle: settingsPage(TENANT_CRUMB, 'Terms of Service', ROUTES.tenantTerms, 'Terms of Service', 'Who in {tenant} has accepted its Terms of Service.'),
+                        ...termsAcceptancePage('TenantTermsAcceptancePage'),
+                      },
+                      {
                         path: ROUTES.tenantAppearance,
                         handle: settingsPage(TENANT_CRUMB, 'Appearance', ROUTES.tenantAppearance, 'Tenant appearance', 'White-label look & feel for every organization of {tenant}, unless an organization overrides it.'),
                         ...appearancePage('TenantAppearancePage'),
@@ -192,6 +203,11 @@ export const router = createBrowserRouter([
                         ...orgSettings('OrganizationActivityPage'),
                       },
                       {
+                        path: ROUTES.organizationTerms,
+                        handle: settingsPage(ORGANIZATION_CRUMB, 'Terms of Service', ROUTES.organizationTerms, 'Terms of Service', 'Who in this organization has accepted the Terms of Service of {tenant}.'),
+                        ...termsAcceptancePage('OrganizationTermsAcceptancePage'),
+                      },
+                      {
                         path: ROUTES.organizationAppearance,
                         handle: settingsPage(ORGANIZATION_CRUMB, 'Appearance', ROUTES.organizationAppearance, 'Organization appearance', 'Overrides for this organization. Anything not set here is inherited from {tenant}.'),
                         ...appearancePage('OrganizationAppearancePage'),
@@ -218,6 +234,17 @@ export const router = createBrowserRouter([
                         ...page(async () => ({ Component: (await import('@/features/account/pages/ConnectedAppsPage')).ConnectedAppsPage })),
                       },
                     ],
+                  },
+                  // Software: release notes and terms (any signed-in user)
+                  {
+                    path: ROUTES.helpReleases,
+                    handle: crumbs(SOFTWARE_CRUMB, { label: 'Release versions', to: ROUTES.helpReleases }),
+                    ...page(async () => ({ Component: (await import('@/features/help/pages/ReleasesPage')).ReleasesPage })),
+                  },
+                  {
+                    path: ROUTES.helpTerms,
+                    handle: crumbs(SOFTWARE_CRUMB, { label: 'Terms of service', to: ROUTES.helpTerms }),
+                    ...page(async () => ({ Component: (await import('@/features/terms/pages/TermsPage')).TermsPage })),
                   },
                   ...Object.entries(LEGACY_ACCOUNT_ROUTES).map(([path, to]) => ({ path, element: <LegacyRedirect to={to} /> })),
                   { path: '*', handle: crumbs({ label: 'Overview', to: ROUTES.overview }, { label: 'Not found', to: ROUTES.overview }), Component: NotFoundPage },

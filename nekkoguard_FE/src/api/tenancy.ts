@@ -47,6 +47,8 @@ export interface TenantDto {
   id: string;
   name: string;
   description: string;
+  /** Where this Tenant's bug reports are emailed; "" = the platform address. */
+  support_email: string;
   /** Null for users who only reach Organizations directly (no Tenant membership). */
   role: TenantRole | null;
   permissions: string[];
@@ -64,6 +66,7 @@ export interface TenantDto {
 export interface TenantUpdateDto {
   name?: string;
   description?: string;
+  support_email?: string;
 }
 
 export interface TenantMembershipDto {

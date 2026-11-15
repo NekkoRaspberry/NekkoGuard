@@ -3,6 +3,7 @@
  * Test helpers for the appearance feature (imported by *.test.ts[x] only).
  * Real providers with fake values — no network, no module mocking.
  */
+import { BugReportProvider } from '@/features/help/BugReportProvider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { useState, type ReactElement, type ReactNode } from 'react';
@@ -53,6 +54,7 @@ export function tenantDto(permissions: string[] = [], role: TenantDto['role'] = 
     id: TENANT_ID,
     name: 'Acme',
     description: '',
+    support_email: '',
     role,
     permissions,
     organization_access: 'all',
@@ -156,7 +158,9 @@ export function Providers({
         <RealtimeContext.Provider value={realtime}>
           <ToastProvider>
             <TenancyContext.Provider value={tenancy}>
-              <TestRouter route={route}>{children}</TestRouter>
+              <TestRouter route={route}>
+                <BugReportProvider>{children}</BugReportProvider>
+              </TestRouter>
             </TenancyContext.Provider>
           </ToastProvider>
         </RealtimeContext.Provider>

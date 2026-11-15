@@ -96,6 +96,7 @@ class TenantSerializer(serializers.ModelSerializer[Tenant]):
             "id",
             "name",
             "description",
+            "support_email",
             "role",
             "permissions",
             "organization_access",
@@ -128,6 +129,9 @@ class TenantSerializer(serializers.ModelSerializer[Tenant]):
 
     def get_is_default(self, obj: Tenant) -> bool:
         return obj.pk == self.context.get("default_tenant_id")
+
+    def validate_support_email(self, value: str) -> str:
+        return value.strip().lower()
 
     def validate_name(self, value: str) -> str:
         ensure_unique_name(
