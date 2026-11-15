@@ -323,7 +323,7 @@ class _AssetView(_AppearanceBase):
         # Refuse oversized bodies before parsing: Django would otherwise spool them
         # to a temporary file (needless disk/SD-card writes).
         try:
-            length = int(request.META.get("CONTENT_LENGTH") or 0)
+            length = int(request.headers.get("content-length") or 0)
         except ValueError:
             length = 0
         if length > MAX_REQUEST_BYTES:

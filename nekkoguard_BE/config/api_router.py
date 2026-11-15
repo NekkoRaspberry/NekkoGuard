@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.urls import path
 from django.urls import re_path
 from rest_framework.routers import DefaultRouter
 from rest_framework.routers import SimpleRouter
@@ -116,16 +117,16 @@ appearance_urls = [
 
 # Software: release notes and bug reports (any signed-in user).
 support_urls = [
-    re_path(r"^help/releases/$", support.ReleasesView.as_view(), name="help-releases"),
-    re_path(r"^bug-reports/$", support.BugReportView.as_view(), name="bug-report"),
+    path("help/releases/", support.ReleasesView.as_view(), name="help-releases"),
+    path("bug-reports/", support.BugReportView.as_view(), name="bug-report"),
 ]
 
 # Tenant Terms of Service. /api/terms/ stays reachable while acceptance is pending
 # (support/middleware.py); everything under a Tenant is checked against the caller.
 VERSION = rf"(?P<version_pk>{UUID_REGEX})"
 terms_urls = [
-    re_path(r"^terms/pending/$", tos.PendingTermsView.as_view(), name="terms-pending"),
-    re_path(r"^terms/decline/$", tos.DeclineTermsView.as_view(), name="terms-decline"),
+    path("terms/pending/", tos.PendingTermsView.as_view(), name="terms-pending"),
+    path("terms/decline/", tos.DeclineTermsView.as_view(), name="terms-decline"),
     re_path(
         rf"^terms/{VERSION}/accept/$",
         tos.AcceptTermsView.as_view(),

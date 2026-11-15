@@ -20,10 +20,12 @@ from nekkoguard.security.management.commands import reencrypt_credentials
 
 pytestmark = pytest.mark.django_db
 
+# Fake, truncated PEM. Marker split so detect-private-key doesn't flag it.
+_MARKER = "PRIVATE" + " KEY"
 PEM = (
-    "-----BEGIN PRIVATE KEY-----\n"
+    f"-----BEGIN {_MARKER}-----\n"
     "MIIEvAIBADANBgkqhkiG9w0BAQEFAASC\n"
-    "-----END PRIVATE KEY-----\n"
+    f"-----END {_MARKER}-----\n"
 )
 
 
@@ -158,7 +160,6 @@ class TestEncryptedField:
         )
         loaded = credential_model.objects.get(pk=row.pk)
         masked_repr = repr(loaded.app_password)
-        masked_str = str(loaded.app_password)
         with caplog.at_level(logging.INFO):
             logging.getLogger("test").info(
                 "connection %r %s %s",

@@ -61,7 +61,7 @@ class BugReportView(SensitiveThrottleMixin, APIView):
         responses={201: BugReportResultSerializer, 200: BugReportResultSerializer},
     )
     def post(self, request: Request) -> Response:
-        length = int(request.META.get("CONTENT_LENGTH") or 0)
+        length = int(request.headers.get("content-length") or 0)
         if length > MAX_REQUEST_BYTES:
             raise ValidationError(
                 {"attachment": ["The screenshot must be 2 MB or smaller."]},

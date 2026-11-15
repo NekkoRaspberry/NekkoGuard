@@ -206,7 +206,7 @@ class AcceptTermsView(SensitiveThrottleMixin, APIView):
         terms.accept(
             user=request.user,  # type: ignore[arg-type]
             version=version,
-            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            user_agent=request.headers.get("user-agent", ""),
         )
         remaining = terms.pending_versions(request.user).count()  # type: ignore[arg-type]
         return Response({"accepted": True, "pending": remaining})

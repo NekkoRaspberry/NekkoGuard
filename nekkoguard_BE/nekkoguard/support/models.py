@@ -71,13 +71,13 @@ class BugReport(models.Model):
     category = models.CharField(
         _("category"),
         max_length=16,
-        choices=BugCategory.choices,
+        choices=BugCategory,
         blank=True,
     )
     severity = models.CharField(
         _("severity"),
         max_length=16,
-        choices=BugSeverity.choices,
+        choices=BugSeverity,
         blank=True,
     )
     steps_to_reproduce = models.TextField(_("steps to reproduce"), blank=True)
@@ -102,7 +102,7 @@ class BugReport(models.Model):
     email_status = models.CharField(
         _("email status"),
         max_length=16,
-        choices=EmailStatus.choices,
+        choices=EmailStatus,
     )
     email_recipient = models.EmailField(_("emailed to"), blank=True)
     email_error = models.CharField(_("email error"), max_length=300, blank=True)
@@ -161,7 +161,7 @@ class TermsVersion(models.Model):
     status = models.CharField(
         _("status"),
         max_length=16,
-        choices=TermsStatus.choices,
+        choices=TermsStatus,
         default=TermsStatus.DRAFT,
     )
     created_by = models.ForeignKey(

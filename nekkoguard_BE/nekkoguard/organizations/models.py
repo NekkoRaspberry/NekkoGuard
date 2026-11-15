@@ -155,7 +155,7 @@ class TenantMembership(TimeStampedModel):
     status = models.CharField(
         _("status"),
         max_length=16,
-        choices=MembershipStatus.choices,
+        choices=MembershipStatus,
         default=MembershipStatus.ACTIVE,
     )
     organization_access = models.CharField(
@@ -262,7 +262,7 @@ class OrganizationMembership(TimeStampedModel):
     status = models.CharField(
         _("status"),
         max_length=16,
-        choices=MembershipStatus.choices,
+        choices=MembershipStatus,
         default=MembershipStatus.ACTIVE,
     )
 
@@ -329,7 +329,7 @@ class OrganizationInvitation(TimeStampedModel):
     status = models.CharField(
         _("status"),
         max_length=16,
-        choices=InvitationStatus.choices,
+        choices=InvitationStatus,
         default=InvitationStatus.PENDING,
     )
     expires_at = models.DateTimeField(_("expires at"))
@@ -619,7 +619,7 @@ class Appearance(TimeStampedModel):
     navbar_position = models.CharField(  # noqa: DJ001
         _("navigation position"),
         max_length=8,
-        choices=NavbarPosition.choices,
+        choices=NavbarPosition,
         null=True,
         blank=True,
     )
