@@ -21,7 +21,7 @@ Three separate decisions — never collapse them:
       only when access comes through the Tenant;
    4. otherwise it is denied (never an implicit grant).
 
-**Superusers** (``User.is_superuser``) bypass decisions 1–3: they administer every
+**Superusers** (``User.is_superuser``) bypass decisions 1-3: they administer every
 active Tenant as an Administrator and hold every permission in every active Organization
 (no membership needed; memberships, suspensions and overrides are ignored). The
 only restriction that still applies is "inactive user / Tenant / Organization".
@@ -299,23 +299,14 @@ def get_organization_access(
     organization: Organization,
 ) -> OrganizationContext | None:
     """``None`` means the user does not reach this Organization at all."""
-    if not _user_ok(user):
-        return None
-    if not organization.is_active or not organization.tenant.is_active:
+    if (
+        not _user_ok(user)
+        or not organization.is_active
+        or not organization.tenant.is_active
+    ):
         return None
     if is_superuser(user):
-        stand_in = superuser_membership(user, organization.tenant)  # type: ignore[arg-type]
-        return OrganizationContext(
-            user=user,  # type: ignore[arg-type]
-            organization=organization,
-            tenant_membership=stand_in,
-            membership=None,
-            via_tenant=True,
-            decisions={
-                p: Decision(p, True, Source.SUPERUSER)  # noqa: FBT003
-                for p in Permission
-            },
-        )
+        return _superuser_context(user, organization)
     tenant_membership = TenantMembership.objects.filter(
         tenant_id=organization.tenant_id,
         user=user,
@@ -347,6 +338,25 @@ def get_organization_access(
         membership=membership,
         via_tenant=via_tenant,
         overrides=overrides,
+    )
+
+
+def _superuser_context(
+    user: AnyUser,
+    organization: Organization,
+) -> OrganizationContext:
+    """Every permission, regardless of memberships, suspensions and overrides."""
+    stand_in = superuser_membership(user, organization.tenant)  # type: ignore[arg-type]
+    return OrganizationContext(
+        user=user,  # type: ignore[arg-type]
+        organization=organization,
+        tenant_membership=stand_in,
+        membership=None,
+        via_tenant=True,
+        decisions={
+            p: Decision(p, True, Source.SUPERUSER)  # noqa: FBT003
+            for p in Permission
+        },
     )
 
 
