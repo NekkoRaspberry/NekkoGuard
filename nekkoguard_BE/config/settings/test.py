@@ -34,5 +34,12 @@ TEMPLATES[0]["OPTIONS"]["debug"] = True  # type: ignore[index]
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#media-url
 MEDIA_URL = "http://media.testserver/"
+# CACHES: per process, cleared before every test (nekkoguard/conftest.py), so rate
+# limits never leak from one test into another.
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+# No proxy in front of the test client: the client IP is REMOTE_ADDR.
+TRUSTED_PROXIES = 0
+ALLAUTH_TRUSTED_PROXY_COUNT = 0
+REST_FRAMEWORK["NUM_PROXIES"] = 0  # noqa: F405
 # Your stuff...
 # ------------------------------------------------------------------------------

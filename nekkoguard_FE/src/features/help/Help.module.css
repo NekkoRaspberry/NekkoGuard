@@ -1,0 +1,193 @@
+/* Software pages: Release versions. Tokens only. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.dot {
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------- Releases */
+
+.releases {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 880px;
+}
+
+.release {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.latest {
+  border-color: var(--border-strong);
+  background-image: var(--glow-card);
+}
+
+.releaseHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.releaseHeader {
+  cursor: pointer;
+}
+
+button.releaseHeader:hover {
+  background: var(--surface-2);
+}
+
+.version {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.latest .version {
+  font-size: 20px;
+}
+
+.releaseTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+}
+
+.date {
+  margin-left: auto;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.releaseBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: 0 var(--space-5) var(--space-5);
+}
+
+.summary {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 22px;
+  color: var(--text-secondary);
+}
+
+.category {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.categoryTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.categoryIcon {
+  display: inline-flex;
+}
+
+.breaking {
+  color: var(--danger);
+}
+
+.security {
+  color: var(--warning);
+}
+
+.features {
+  color: var(--primary-hover);
+}
+
+.improvements {
+  color: var(--info);
+}
+
+.fixes {
+  color: var(--success);
+}
+
+.entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  font-size: var(--fs-body);
+  line-height: 22px;
+  color: var(--text-primary);
+}
+
+.loadMore {
+  align-self: flex-start;
+}
+
+/* ---------------------------------------------------------------- shared states */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-5);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}

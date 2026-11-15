@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>[NekkoGuard Bug Report] {{ report.title }}</title>
+  </head>
+  <body style="margin:0;
+               padding:0;
+               background:#f4f4f8;
+               font-family:'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+               color:#1d1d2b">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{ report.title }} — reported by {{ reporter }}</div>
+    <table role="presentation"
+           width="100%"
+           cellpadding="0"
+           cellspacing="0"
+           style="background:#f4f4f8">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation"
+                 width="100%"
+                 cellpadding="0"
+                 cellspacing="0"
+                 style="max-width:600px;
+                        background:#ffffff;
+                        border-radius:12px;
+                        border:1px solid #e4e4ee">
+            <tr>
+              <td style="padding:28px 32px 0;">
+                <span style="font-size:20px;
+                             font-weight:700;
+                             letter-spacing:-0.01em;
+                             color:#1d1d2b">Nekko<span style="color:#7c6cf6;">Guard</span></span>
+                <span style="margin-left:8px;
+                             font-size:12px;
+                             font-weight:600;
+                             letter-spacing:0.06em;
+                             text-transform:uppercase;
+                             color:#8a8aa0">Bug report</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px 8px;">
+                <h1 style="margin:0 0 12px;
+                           font-size:21px;
+                           line-height:29px;
+                           font-weight:600;
+                           color:#1d1d2b">{{ report.title }}</h1>
+                {% if severity or category %}
+                  <p style="margin:0 0 16px;font-size:13px;line-height:20px;">
+                    {% if severity %}<span style="display:inline-block;
+                                                  padding:2px 10px;
+                                                  margin-right:6px;
+                                                  border-radius:999px;
+                                                  background:{% if report.severity == 'critical' %}#fde3e6;
+                                                  color:#b4192c{% elif report.severity == 'high' %}#ffe8dc;
+                                                  color:#b34a12{% elif report.severity == 'medium' %}#fdf1d8;
+                                                  color:#8a5b00{% else %}#e3eefc;
+                                                  color:#1f5fa8{% endif %};
+                                                  font-weight:600">{{ severity }}</span>{% endif %}
+                    {% if category %}<span style="display:inline-block;
+                                                  padding:2px 10px;
+                                                  border-radius:999px;
+                                                  background:#eeeef4;
+                                                  color:#4a4a5e;
+                                                  font-weight:600">{{ category }}</span>{% endif %}
+                  </p>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px 8px;">
+                <h2 style="margin:0 0 6px;
+                           font-size:13px;
+                           font-weight:600;
+                           letter-spacing:0.04em;
+                           text-transform:uppercase;
+                           color:#6e6e82">Description</h2>
+                <p style="margin:0 0 20px;
+                          font-size:15px;
+                          line-height:24px;
+                          white-space:pre-wrap">{{ report.description }}</p>
+                {% if report.steps_to_reproduce %}
+                  <h2 style="margin:0 0 6px;
+                             font-size:13px;
+                             font-weight:600;
+                             letter-spacing:0.04em;
+                             text-transform:uppercase;
+                             color:#6e6e82">Steps to reproduce</h2>
+                  <p style="margin:0 0 20px;
+                            font-size:15px;
+                            line-height:24px;
+                            white-space:pre-wrap">{{ report.steps_to_reproduce }}</p>
+                {% endif %}
+                {% if report.expected_behavior %}
+                  <h2 style="margin:0 0 6px;
+                             font-size:13px;
+                             font-weight:600;
+                             letter-spacing:0.04em;
+                             text-transform:uppercase;
+                             color:#6e6e82">Expected behavior</h2>
+                  <p style="margin:0 0 20px;
+                            font-size:15px;
+                            line-height:24px;
+                            white-space:pre-wrap">{{ report.expected_behavior }}</p>
+                {% endif %}
+                {% if report.actual_behavior %}
+                  <h2 style="margin:0 0 6px;
+                             font-size:13px;
+                             font-weight:600;
+                             letter-spacing:0.04em;
+                             text-transform:uppercase;
+                             color:#6e6e82">Actual behavior</h2>
+                  <p style="margin:0 0 20px;
+                            font-size:15px;
+                            line-height:24px;
+                            white-space:pre-wrap">{{ report.actual_behavior }}</p>
+                {% endif %}
+                {% if report.additional_comments %}
+                  <h2 style="margin:0 0 6px;
+                             font-size:13px;
+                             font-weight:600;
+                             letter-spacing:0.04em;
+                             text-transform:uppercase;
+                             color:#6e6e82">Additional comments</h2>
+                  <p style="margin:0 0 20px;
+                            font-size:15px;
+                            line-height:24px;
+                            white-space:pre-wrap">{{ report.additional_comments }}</p>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px 24px;">
+                <table role="presentation"
+                       width="100%"
+                       cellpadding="0"
+                       cellspacing="0"
+                       style="background:#f7f7fb;
+                              border:1px solid #e4e4ee;
+                              border-radius:8px;
+                              font-size:13px;
+                              line-height:20px">
+                  <tr>
+                    <td colspan="2"
+                        style="padding:12px 16px 4px;
+                               font-size:12px;
+                               font-weight:600;
+                               letter-spacing:0.04em;
+                               text-transform:uppercase;
+                               color:#6e6e82">Context</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:4px 16px;color:#6e6e82;width:150px;">Reporter</td>
+                    <td style="padding:4px 16px;">{{ reporter }}</td>
+                  </tr>
+                  {% if tenant_name %}<tr><td style="padding:4px 16px;color:#6e6e82;">Tenant</td><td style="padding:4px 16px;">{{ tenant_name }}</td></tr>{% endif %}
+                  {% if organization_name %}<tr><td style="padding:4px 16px;color:#6e6e82;">Organization</td><td style="padding:4px 16px;">{{ organization_name }}</td></tr>{% endif %}
+                  {% if report.page %}<tr><td style="padding:4px 16px;color:#6e6e82;">Page</td><td style="padding:4px 16px;
+                                                                                                          font-family:'JetBrains Mono',ui-monospace,monospace">{{ report.page }}</td></tr>{% endif %}
+                  <tr><td style="padding:4px 16px;color:#6e6e82;">Version</td><td style="padding:4px 16px;">{{ report.app_version }}{% if report.client_version and report.client_version != report.app_version %} (frontend {{ report.client_version }}){% endif %}</td></tr>
+                  {% if report.browser %}<tr><td style="padding:4px 16px;color:#6e6e82;">Browser</td><td style="padding:4px 16px;">{{ report.browser }}</td></tr>{% endif %}
+                  {% if report.operating_system %}<tr><td style="padding:4px 16px;color:#6e6e82;">Operating system</td><td style="padding:4px 16px;">{{ report.operating_system }}</td></tr>{% endif %}
+                  {% if report.viewport %}<tr><td style="padding:4px 16px;color:#6e6e82;">Viewport</td><td style="padding:4px 16px;">{{ report.viewport }}</td></tr>{% endif %}
+                  <tr>
+                    <td style="padding:4px 16px;color:#6e6e82;">Submitted</td>
+                    <td style="padding:4px 16px;">{{ report.created_at|date:"j F Y, H:i T" }}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:4px 16px 12px;color:#6e6e82;">Report ID</td>
+                    <td style="padding:4px 16px 12px;
+                               font-family:'JetBrains Mono',ui-monospace,monospace">{{ report.id }}</td>
+                  </tr>
+                </table>
+                {% if report.attachment %}<p style="margin:16px 0 0;
+                                                    font-size:14px;
+                                                    line-height:22px;
+                                                    color:#4a4a5e">A screenshot is attached to this email.</p>{% endif %}
+                <p style="margin:16px 0 0;
+                          font-size:14px;
+                          line-height:22px;
+                          color:#4a4a5e">Reply to this email to answer the reporter.</p>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:16px 0 0;
+                    font-size:12px;
+                    line-height:18px;
+                    color:#8a8aa0">You received this email because this address receives NekkoGuard bug reports{% if tenant_name %} for {{ tenant_name }}{% endif %}.</p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -45,3 +45,10 @@
     padding: var(--space-4);
   }
 }
+
+/* White-label "right" navigation: the same sidebar on the other side (desktop). */
+@media (min-width: 640px) {
+  .navRight {
+    flex-direction: row-reverse;
+  }
+}

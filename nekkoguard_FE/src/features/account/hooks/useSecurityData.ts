@@ -11,6 +11,14 @@ export function useEmailAddresses() {
   });
 }
 
+export function useSessions() {
+  return useQuery({
+    queryKey: queryKeys.sessions,
+    queryFn: allauth.listSessions,
+    select: (envelope) => envelope.data ?? [],
+  });
+}
+
 export interface AuthenticatorSummary {
   totp: TotpAuthenticatorDto | null;
   recoveryCodes: RecoveryCodesAuthenticatorDto | null;

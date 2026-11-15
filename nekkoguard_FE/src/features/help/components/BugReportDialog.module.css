@@ -1,0 +1,149 @@
+/* Report a bug dialog. Tokens only; fields come from the shared form components. */
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+@media (max-width: 639px) {
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  padding: var(--space-1) 0;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.disclosure:hover {
+  color: var(--text-primary);
+}
+
+.disclosureIcon {
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.disclosureOpen {
+  transform: rotate(180deg);
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--border-subtle);
+}
+
+.attachment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.attachmentLabel {
+  width: 100%;
+  font-size: var(--fs-label);
+  line-height: var(--lh-label);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  padding: 2px 2px 2px var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+}
+
+.fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hint {
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.fieldError {
+  font-size: var(--fs-small);
+  color: var(--danger);
+}
+
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.reviewTitle {
+  margin: 0;
+  font-size: var(--fs-h3, 15px);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.reviewText,
+.preWrap {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+}
+
+.contextBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.contextTitle {
+  margin: 0;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.contextText {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-small);
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+
+.reference {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}

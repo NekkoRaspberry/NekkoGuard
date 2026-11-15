@@ -33,10 +33,10 @@ export function RequireAuth() {
   const location = useLocation();
 
   if (!isAuthenticated) {
-    // Return to the requested page after sign-in — but not after a deliberate sign-out,
-    // where the next person to sign in should start at the overview.
-    const state: LoginLocationState =
-      lastSignOutReason === 'user' ? {} : { from: `${location.pathname}${location.search}` };
+    // Return to the requested page after sign-in — but not after a deliberate sign-out
+    // (or declining the Terms), where the next sign-in should start at the overview.
+    const deliberate = lastSignOutReason === 'user' || lastSignOutReason === 'terms_declined';
+    const state: LoginLocationState = deliberate ? {} : { from: `${location.pathname}${location.search}` };
     return <Navigate to={ROUTES.login} replace state={state} />;
   }
   return <Outlet />;

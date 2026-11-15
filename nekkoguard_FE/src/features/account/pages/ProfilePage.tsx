@@ -5,7 +5,6 @@ import { Card, CardBody, CardHeader } from '@/components/Card/Card';
 import { ErrorState } from '@/components/ErrorState/ErrorState';
 import { Skeleton } from '@/components/Skeleton/Skeleton';
 import { TextField } from '@/components/TextField/TextField';
-import { PageHeader } from '@/layout/PageHeader/PageHeader';
 import { ProfileForm } from '../components/ProfileForm';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import formStyles from '../components/AccountForms.module.css';
@@ -23,13 +22,12 @@ function ProfileFormSkeleton() {
   );
 }
 
+/** Settings → Profile → Personal information (title: route handle). */
 export function ProfilePage() {
   const { data: user, isPending, isError, error, refetch, isFetching } = useCurrentUser();
 
   return (
     <div className={styles.page}>
-      <PageHeader title="Profile" description="Manage the personal details of your NekkoGuard account." />
-
       <div className={styles.stack}>
         {isPending ? (
           <ProfileFormSkeleton />

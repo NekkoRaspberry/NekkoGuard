@@ -17,6 +17,7 @@ import type {
   SessionEnvelope,
   TotpAuthenticatorDto,
   TotpSetupMeta,
+  UserSessionDto,
 } from './types';
 
 /** django-allauth headless, "browser" client (session cookie + CSRF). */
@@ -153,6 +154,11 @@ export const allauth = {
   makePrimaryEmail: (email: string) =>
     accountCall<AllauthEnvelope<EmailAddressDto[]>>('PATCH', '/account/email', { email, primary: true }),
   removeEmail: (email: string) => accountCall<AllauthEnvelope<EmailAddressDto[]>>('DELETE', '/account/email', { email }),
+
+  /** Active sessions of the signed-in user. */
+  listSessions: () => accountCall<AllauthEnvelope<UserSessionDto[]>>('GET', '/auth/sessions'),
+  /** Signs those sessions out; returns the remaining ones. Ending the current one signs out here. */
+  endSessions: (ids: number[]) => accountCall<AllauthEnvelope<UserSessionDto[]>>('DELETE', '/auth/sessions', { sessions: ids }),
 
   listAuthenticators: () => accountCall<AllauthEnvelope<AuthenticatorDto[]>>('GET', '/account/authenticators'),
 

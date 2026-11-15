@@ -40,6 +40,8 @@ class TestUserViewSet:
             "email": user.email,
             "name": user.name,
             "is_staff": user.is_staff,
+            "mfa_enabled": False,
+            "mfa_required": False,
             "url": f"http://testserver/api/users/{user.pk}/",
         }
 

@@ -1,0 +1,56 @@
+# Starting text for a Tenant's FIRST Terms of Service draft (Software › Terms of
+# service › New version). It is a structure only, not legal text: each Tenant
+# administrator replaces it with their approved terms before publishing.
+# After that, a Tenant's new drafts start from its own current version instead.
+# (version, status and effective_date are ignored; kept so the loader stays strict.)
+
+title = "Terms of Service"
+version = "draft"
+status = "draft"          # "draft" or "published"
+effective_date = ""       # YYYY-MM-DD, required when published
+summary = "The terms that apply to your use of NekkoGuard."
+
+[[sections]]
+id = "acceptance"
+title = "Acceptance of the terms"
+paragraphs = ["To be written: who these terms apply to and how they are accepted."]
+
+[[sections]]
+id = "accounts"
+title = "Accounts and access"
+paragraphs = ["To be written: account responsibilities, credentials and two-factor authentication."]
+
+[[sections]]
+id = "acceptable-use"
+title = "Acceptable use"
+paragraphs = ["To be written: permitted use, including monitoring only networks and systems you are authorized to manage."]
+
+[[sections]]
+id = "data"
+title = "Your data"
+paragraphs = ["To be written: ownership, processing and isolation of tenant and organization data."]
+
+[[sections]]
+id = "availability"
+title = "Availability and changes to the service"
+paragraphs = ["To be written: service availability, maintenance and changes."]
+
+[[sections]]
+id = "termination"
+title = "Suspension and termination"
+paragraphs = ["To be written: when access may be suspended or ended."]
+
+[[sections]]
+id = "liability"
+title = "Disclaimers and limitation of liability"
+paragraphs = ["To be written."]
+
+[[sections]]
+id = "changes"
+title = "Changes to these terms"
+paragraphs = ["To be written: how users are informed of new versions."]
+
+[[sections]]
+id = "contact"
+title = "Contact"
+paragraphs = ["To be written: how to contact the operator of this NekkoGuard installation."]

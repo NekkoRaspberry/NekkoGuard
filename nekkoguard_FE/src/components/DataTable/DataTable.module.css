@@ -1,0 +1,116 @@
+.scroll {
+  overflow-x: auto;
+  margin: 0 calc(-1 * var(--space-5));
+  padding: 0 var(--space-5);
+}
+
+/* Table actions (Excel export), right-aligned above the header. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.exportError {
+  font-size: var(--fs-label);
+  color: var(--danger);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+}
+
+.table th {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+/* Sortable header: same look as a plain header, plus a direction indicator. */
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+}
+
+.sortButton:hover,
+.sortActive {
+  color: var(--text-secondary);
+}
+
+.sortButton:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.sortIcon {
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+.sortActive .sortIcon {
+  opacity: 1;
+  color: var(--primary-hover);
+}
+
+.table td {
+  padding: var(--space-3);
+  vertical-align: middle;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td {
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+}
+
+.table th:first-child,
+.table td:first-child {
+  padding-left: 0;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: 0;
+}
+
+.end {
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+@media (max-width: 720px) {
+  .secondary {
+    display: none;
+  }
+}

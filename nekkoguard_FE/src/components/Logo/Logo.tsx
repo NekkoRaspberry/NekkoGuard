@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import styles from './Logo.module.css';
 
 interface LogoProps {
@@ -6,6 +7,10 @@ interface LogoProps {
   size?: number;
   /** Extra word after the wordmark, e.g. "Administration". */
   suffix?: string;
+  /** White-label logo image (replaces the mark; falls back to it if it fails to load). */
+  imageSrc?: string | null;
+  /** White-label title (replaces the "NekkoGuard" wordmark). */
+  title?: string | null;
 }
 
 export function LogoMark({ size = 32 }: { size?: number }) {
@@ -26,13 +31,32 @@ export function LogoMark({ size = 32 }: { size?: number }) {
   );
 }
 
-export function Logo({ withWordmark = true, size = 32, suffix }: LogoProps) {
+export function Logo({ withWordmark = true, size = 32, suffix, imageSrc, title }: LogoProps) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const showImage = Boolean(imageSrc) && failedSrc !== imageSrc;
+
   return (
     <span className={styles.logo}>
-      <LogoMark size={size} />
+      {showImage ? (
+        <img
+          src={imageSrc ?? undefined}
+          alt=""
+          className={styles.image}
+          style={{ height: size, maxWidth: withWordmark ? size * 5 : size }}
+          onError={() => setFailedSrc(imageSrc ?? null)}
+        />
+      ) : (
+        <LogoMark size={size} />
+      )}
       {withWordmark && (
         <span className={styles.wordmark}>
-          Nekko<span className={styles.accent}>Guard</span>
+          {title ? (
+            <span className={styles.customTitle}>{title}</span>
+          ) : (
+            <>
+              Nekko<span className={styles.accent}>Guard</span>
+            </>
+          )}
           {suffix && <span className={styles.suffix}> {suffix}</span>}
         </span>
       )}

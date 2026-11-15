@@ -1,7 +1,18 @@
 # Security headers for the SPA only (backend responses keep Django's own headers).
 # Rendered by envsubst at container start → /etc/nginx/conf.d/spa-headers.inc
-add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ${CSP_CONNECT_SRC}; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com https://github.com https://www.linkedin.com; frame-ancestors 'none'" always;
+#
+# CSP: everything from this origin only. No inline scripts, no eval. Styles: bundled
+# files, plus <style> tags carrying this request's nonce ($request_id, written into
+# index.html by sub_filter) — Radix's scroll lock adds those; no 'unsafe-inline'.
+# React sets style attributes through the DOM, which CSP allows. data: images =
+# logo/screenshot previews before upload. form-action lists the external sign-in
+# providers (their redirect follows the sign-in form post).
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'nonce-$request_id'; img-src 'self' data:; font-src 'self'; connect-src ${CSP_CONNECT_SRC}; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com https://github.com https://www.linkedin.com; frame-ancestors 'none'" always;
 add_header X-Content-Type-Options "nosniff" always;
 add_header X-Frame-Options "DENY" always;
-add_header Referrer-Policy "same-origin" always;
-add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()" always;
+add_header Cross-Origin-Opener-Policy "same-origin" always;
+add_header Cross-Origin-Resource-Policy "same-origin" always;
+# HSTS is sent by the TLS-terminating proxy (Traefik) and by Django on HTTPS
+# requests; this nginx only ever sees plain HTTP from the proxy.

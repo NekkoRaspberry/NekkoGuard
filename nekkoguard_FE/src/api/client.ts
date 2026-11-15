@@ -15,6 +15,24 @@ const AUTH_FAILURE_MESSAGES = new Set([
 type SessionLostHandler = () => void;
 let sessionLostHandler: SessionLostHandler | null = null;
 
+/** Backend code of a 403 meaning "accept the Terms of Service first" (support/middleware.py). */
+export const TERMS_REQUIRED_CODE = 'terms_acceptance_required';
+let termsRequiredHandler: (() => void) | null = null;
+
+/** Backend code of a 403 meaning "turn on MFA to administer this tenant". */
+export const MFA_REQUIRED_CODE = 'mfa_required';
+let mfaRequiredHandler: (() => void) | null = null;
+
+/** Registered by the app shell: re-reads the user so the MFA notice appears. */
+export function setMfaRequiredHandler(handler: (() => void) | null): void {
+  mfaRequiredHandler = handler;
+}
+
+/** Registered by the TermsGate: any blocked request brings the acceptance screen back. */
+export function setTermsRequiredHandler(handler: (() => void) | null): void {
+  termsRequiredHandler = handler;
+}
+
 /** Registered by the AuthProvider: a lost session anywhere re-checks the auth state. */
 export function setSessionLostHandler(handler: SessionLostHandler | null): void {
   sessionLostHandler = handler;
@@ -29,6 +47,13 @@ export async function apiRequest<T>(path: string, options: HttpRequest = {}): Pr
   const { status, data } = await httpRequest(path, options);
 
   if (status >= 200 && status < 300) return data as T;
+
+  if (status === 403 && (data as { code?: unknown } | null)?.code === TERMS_REQUIRED_CODE) {
+    termsRequiredHandler?.();
+    throw new ApiError({ kind: 'http', status, message: 'Accept the Terms of Service to continue.' });
+  }
+
+  if (status === 403 && (data as { code?: unknown } | null)?.code === MFA_REQUIRED_CODE) mfaRequiredHandler?.();
 
   const { message, fieldErrors } = parseDrfErrorBody(data);
   const isAuthFailure = status === 401 || (status === 403 && message !== null && AUTH_FAILURE_MESSAGES.has(message));

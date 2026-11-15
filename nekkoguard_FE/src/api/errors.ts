@@ -66,6 +66,8 @@ export function parseDrfErrorBody(body: unknown): { message: string | null; fiel
   }
 
   for (const [key, value] of Object.entries(body)) {
+    // Machine-readable extras (e.g. "code": "mfa_required", "retry_after": 30), not field errors.
+    if (key === 'code' || key === 'retry_after') continue;
     if (key === 'detail' && typeof value === 'string') {
       message = value;
     } else if (key === 'non_field_errors' && isStringArray(value)) {

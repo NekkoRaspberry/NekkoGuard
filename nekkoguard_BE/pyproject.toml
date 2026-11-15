@@ -16,6 +16,7 @@ dependencies = [
   "argon2-cffi==25.1.0",
   "celery==5.7.0",
   "crispy-bootstrap5==2026.9",
+  "cryptography==50.0.2",
   "django==6.0.10",
   "django-allauth[mfa,socialaccount]==65.21.1",
   "django-anymail[mailgun]==15.2",
@@ -80,6 +81,8 @@ custom_blocks = "element,slot"
 ignore = "H006,H030,H031"
 css.indent_size = 2
 js.indent_size = 2
+# Email HTML needs inline styles: mail clients ignore <style> sheets.
+per-file-ignores = { "/email/" = "H021" }
 
 # ==== ruff ====
 [tool.ruff]

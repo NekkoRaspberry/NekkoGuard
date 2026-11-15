@@ -12,6 +12,11 @@ export interface UserDto {
   email: string;
   name: string;
   is_staff: boolean;
+  /** A second factor (authenticator app / security key) is active. */
+  mfa_enabled: boolean;
+  /** Administers a Tenant (or is a superuser) but this session has not passed MFA:
+   *  Member rights until then (403 mfa_required on administration). */
+  mfa_required: boolean;
   url: string;
 }
 
@@ -78,6 +83,18 @@ export interface EmailAddressDto {
   email: string;
   primary: boolean;
   verified: boolean;
+}
+
+/** One signed-in session of the current user (allauth usersessions). No session key. */
+export interface UserSessionDto {
+  id: number;
+  user_agent: string;
+  ip: string;
+  /** Seconds since the epoch. */
+  created_at: number;
+  /** Only when the server tracks activity (USERSESSIONS_TRACK_ACTIVITY). */
+  last_seen_at?: number;
+  is_current: boolean;
 }
 
 export interface TotpAuthenticatorDto {

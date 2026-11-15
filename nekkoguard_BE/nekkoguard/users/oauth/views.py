@@ -32,6 +32,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from nekkoguard.organizations import access
 from nekkoguard.users.frontend import frontend_url
 
 from .serializers import ApplicationCreateSerializer
@@ -157,6 +158,11 @@ class ApplicationViewSet(
 
     permission_classes = [IsAdminUser]
     queryset = Application.objects.order_by("name")
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        # Platform-level privilege: an MFA-verified session (never a token).
+        access.ensure_request_mfa(request)
 
     def get_serializer_class(self):
         return (

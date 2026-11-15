@@ -9,6 +9,7 @@ from django.views.generic import TemplateView
 from drf_spectacular.views import SpectacularAPIView
 from drf_spectacular.views import SpectacularSwaggerView
 
+from nekkoguard.users import impersonation
 from nekkoguard.users.admin_auth import admin_signout
 from nekkoguard.users.oauth import urls as oauth_urls
 
@@ -43,6 +44,16 @@ urlpatterns += [
     # Connected applications: management API + profile resource for approved apps
     path("api/oauth/", include(oauth_urls.api_urlpatterns)),
     # API base url
+    path(
+        "api/impersonation/",
+        impersonation.ImpersonationView.as_view(),
+        name="impersonation",
+    ),
+    path(
+        "api/impersonation/users/",
+        impersonation.ImpersonationUsersView.as_view(),
+        name="impersonation-users",
+    ),
     path("api/", include("config.api_router")),
     # No public token endpoint: obtain_auth_token checked only email + password,
     # bypassing mandatory email verification and 2FA. Browser clients sign in through

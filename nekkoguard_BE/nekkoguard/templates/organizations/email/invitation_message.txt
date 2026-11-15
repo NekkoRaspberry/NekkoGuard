@@ -1,0 +1,19 @@
+{% autoescape off %}Hello,
+
+{{ inviter_name }} has invited you to join {{ organization_name }} on NekkoGuard.
+
+NekkoGuard provides a centralized environment for monitoring and managing IT infrastructure.
+
+To accept your invitation, create your account using this email address ({{ email }}), or sign in if you already have one:
+
+{{ accept_url }}
+
+After creating your account and accepting the invitation, you will be able to access {{ organization_name }} with {{ role_label }} (view-only) permissions. An administrator of the organization can change them later.
+
+This invitation expires on {{ expires_at|date:"j F Y" }}.
+
+If you were not expecting this invitation, you can safely ignore this email.
+
+Best regards,
+The NekkoGuard Team
+{% endautoescape %}

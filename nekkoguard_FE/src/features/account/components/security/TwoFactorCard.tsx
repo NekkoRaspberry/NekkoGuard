@@ -43,6 +43,11 @@ export function TwoFactorCard() {
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.authenticators });
     void queryClient.invalidateQueries({ queryKey: queryKeys.session });
+    // MFA status decides whether Tenant administration is allowed (mfa_required), so
+    // the effective permissions of every Tenant / Organization change with it.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.currentUser });
+    void queryClient.invalidateQueries({ queryKey: ['tenants'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.myOrganizations });
   };
 
   async function run(kind: Exclude<Busy, null>, action: () => Promise<void>) {

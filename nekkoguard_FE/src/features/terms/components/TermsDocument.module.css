@@ -1,0 +1,259 @@
+/* Reading layout for Terms of Service: reader, preview, history and acceptance screen. */
+
+.reader {
+  display: grid;
+  grid-template-columns: minmax(0, 860px);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* Index on the left, the card right next to it. */
+@media (min-width: 1024px) {
+  .reader {
+    grid-template-columns: 220px minmax(0, 860px);
+  }
+
+  .readerNoOutline {
+    grid-template-columns: minmax(0, 860px);
+  }
+}
+
+.article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  padding: var(--space-8);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 639px) {
+  .article {
+    padding: var(--space-5);
+  }
+}
+
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+
+/* ---------------------------------------------------------------- document */
+
+.document {
+  font-size: 15px;
+  line-height: 26px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.document > :first-child {
+  margin-top: 0;
+}
+
+.paragraph {
+  margin: 0 0 var(--space-3);
+}
+
+.heading {
+  margin: var(--space-8) 0 var(--space-3);
+  color: var(--text-primary);
+  font-weight: 600;
+  scroll-margin-top: var(--space-6);
+}
+
+.heading:focus {
+  outline: none;
+}
+
+.heading:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: var(--radius-xs);
+}
+
+.h1 {
+  font-size: var(--fs-h2);
+  line-height: 24px;
+}
+
+.h2 {
+  margin-top: var(--space-6);
+  font-size: var(--fs-h3);
+  line-height: 22px;
+}
+
+.h3 {
+  margin-top: var(--space-5);
+  font-size: var(--fs-body);
+  line-height: 20px;
+}
+
+.number {
+  margin-right: var(--space-2);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.alignCenter {
+  text-align: center;
+}
+
+.alignRight {
+  text-align: right;
+}
+
+.alignJustify {
+  text-align: justify;
+}
+
+.list {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-6);
+}
+
+.list .list {
+  margin-bottom: 0;
+}
+
+.list li > p {
+  margin-bottom: var(--space-1);
+}
+
+.quote {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-1) var(--space-4);
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.rule {
+  margin: var(--space-6) 0;
+  border: none;
+  border-top: 1px solid var(--border-default);
+}
+
+.link {
+  color: var(--primary-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tableWrap {
+  margin: 0 0 var(--space-4);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+  line-height: 20px;
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.table p {
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- outline */
+
+.outline {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .outline {
+    position: sticky;
+    top: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+  }
+}
+
+.outlineLabel {
+  margin: 0;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.outlineList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outlineLink {
+  display: flex;
+  gap: var(--space-2);
+  padding: 5px var(--space-3);
+  border-left: 2px solid var(--border-subtle);
+  font-size: var(--fs-small);
+  line-height: 18px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.outlineLink:hover {
+  border-left-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.outlineNumber {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.outlineLevel2 .outlineLink {
+  padding-left: var(--space-6);
+}
+
+.outlineLevel3 .outlineLink {
+  padding-left: var(--space-8);
+  font-size: 12px;
+}

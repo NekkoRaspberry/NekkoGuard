@@ -7,7 +7,7 @@ nginx container that also reverse-proxies the Django backend (same origin, no CO
 
 ## Scope
 
-The frontend reflects what the backend implements today (user accounts):
+The frontend reflects what the backend implements today (user accounts and multi-tenancy):
 
 | Page | Route | Backend |
 |---|---|---|
@@ -16,10 +16,20 @@ The frontend reflects what the backend implements today (user accounts):
 | Verify email (link from email) | `/verify-email/:key` | `…/auth/email/verify` |
 | Forgot / reset password | `/forgot-password`, `/reset-password/:key` | `…/auth/password/request`, `…/auth/password/reset` |
 | Overview | `/` | `GET /api/users/me/`, `…/account/authenticators`, WebSocket `ping` → `pong!` |
-| Profile | `/account/profile` | `GET /api/users/me/`, `PATCH /api/users/{pk}/` (`name`) |
-| Security | `/account/security` | `…/account/password/change`, `…/account/email`, `…/account/authenticators/*` (TOTP, recovery codes), `DELETE …/auth/session` |
-| Connected applications | `/account/connected-apps` | `/api/oauth/authorized-apps/` (all users), `/api/oauth/applications/` (staff), consent page `/o/authorize/` |
+| Sites & networks | `/infrastructure` | `/api/tenants/{t}/organizations/{o}/sites/`, `…/networks/` |
+| Settings → Tenant (selected Tenant) | `/settings/tenant` (+ `/organizations`, `/organizations/manage`, `/organizations/manage/appearance`, `/members`, `/activity`, `/appearance`) | `/api/tenants/{t}/` (+ `members/`, `organizations/`, `activity/`, `appearance/`) |
+| Settings → Organization (selected Organization) | `/settings/organization` (+ `/members`, `/access` = Permissions, `/activity`, `/appearance`) | `/api/tenants/{t}/organizations/{o}/` (+ `members/` (add by email), `invitations/`, `overrides/`, `access/`, `activity/?ordering=`, `appearance/`) |
+| Organization invitation (link from email) | `/invitations/:token` | `GET /api/invitations/{token}/`, `POST …/accept/` |
+| Settings → Profile → Personal information | `/settings/profile` | `GET /api/users/me/`, `PATCH /api/users/{pk}/` (`name`) |
+| Settings → Profile → Security | `/settings/profile/security` | `…/account/password/change`, `…/account/email`, `…/account/authenticators/*` (TOTP, recovery codes), `DELETE …/auth/session` |
+| Settings → Profile → Connected applications | `/settings/profile/applications` | `/api/oauth/authorized-apps/` (all users), `/api/oauth/applications/` (staff), consent page `/o/authorize/` |
+| Software → Release versions | `/help/releases` | `GET /api/help/releases/` |
+| Software → Terms of service (selected Tenant; editor, history and acceptance for Tenant administrators) | `/help/terms` | `/api/tenants/{t}/terms/` (+ `versions/`, `versions/{v}/publish/`, `acceptances/`) |
+| Mandatory Terms acceptance (before the app, whenever pending) | — | `GET /api/terms/pending/`, `POST /api/terms/{v}/accept/`, `POST /api/terms/decline/` |
+| Software → Report a bug (dialog; sidebar or account menu) | — | `POST /api/bug-reports/` |
 | Google / GitHub / LinkedIn sign-in | `/login`, `/auth/callback`, `/signup/provider` | allauth provider flow; buttons appear only for providers configured in the backend env |
+
+Old `/account/*` URLs redirect to their Settings → Profile page. Platform administration (creating and deactivating Tenants) is not part of the web app: use Django admin.
 
 Authentication uses **django-allauth headless** (`/_allauth/browser/v1/…`), browser client:
 
@@ -38,12 +48,28 @@ src/
 │   ├── auth/     AuthProvider (session state), route guards, auth pages, re-authentication
 │   ├── account/  profile + security (password, emails, 2FA) cards and hooks
 │   ├── overview/ overview page cards
-│   └── system/   API health + WebSocket heartbeat
+│   ├── system/   API health + WebSocket heartbeat
+│   ├── tenancy/  context (TenancyProvider, selection logic, useCan…), context bar, scope gates
+│   ├── infrastructure/ sites & networks page
+│   └── settings/ organization / tenant / platform management screens
 ├── components/   design-system primitives (Button, TextField, Card, Modal, Toast, …)
 ├── layout/       AppShell, Sidebar, TopBar, PageHeader, EntranceLayout
 ├── styles/       tokens.css (design tokens from the look spec), base.css
 └── hooks/, lib/, config/
 ```
+
+## Tenant & organization context
+
+- The top bar selects **Tenant → Organization → Site → Network**. Only what the backend lists for the
+  user is offered. The selection is **never in the URL**: it lives in memory and is remembered per
+  user in this browser, so a refresh reopens it. Pages never carry tenant/organization ids
+  (the organization managed from Settings → Tenant is passed as navigation state). Ids the user
+  can no longer access are dropped, with a notice.
+- Hooks: `useTenancy()`, `useCurrentTenant()`, `useCurrentOrganization()`, `useEffectivePermissions()`,
+  `useCan('sites.manage')`, `useCanTenant('tenant.members.manage')`. They only hide/disable UI — the
+  backend resolves and enforces every permission.
+- Query keys are hierarchical (`['tenants', t, 'organizations', o, …]`, see `src/api/queryKeys.ts`):
+  data of one tenant/organization is never reused for another, and switching drops the previous scope.
 
 ## Requirements
 
@@ -85,6 +111,7 @@ VS Code sees the same dependencies for IntelliSense.
 docker compose --profile dev run --rm frontend-dev npm run typecheck
 docker compose --profile dev run --rm frontend-dev npm run lint
 docker compose --profile dev run --rm frontend-dev npm run build
+docker compose --profile dev run --rm frontend-dev npm test        # Vitest unit tests
 ```
 
 ## Configuration
@@ -107,3 +134,13 @@ Django only answers for host names in `DJANGO_ALLOWED_HOSTS`
 you browse to (e.g. `<PI_IP>`, `nekkoraspberry.local`). After editing, recreate the backend
 container: `docker compose -f docker-compose.local.yml up -d --force-recreate django`.
 If the Pi's address changes (DHCP), update this list — or give the Pi a DHCP reservation.
+
+### Security headers (production nginx)
+
+`nginx/spa-headers.inc.template` sets a strict Content-Security-Policy for the app (scripts and
+styles from this origin only, no `unsafe-inline`/`unsafe-eval`, no framing), plus nosniff,
+`Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, COOP and CORP.
+Runtime `<style>` tags (Radix's scroll lock) carry a per-request nonce: nginx writes
+`$request_id` into the CSP header and into `<meta name="csp-nonce">` in `index.html`
+(`sub_filter`), and `src/main.tsx` hands it to `get-nonce`. The Tiptap editor's CSS injection is
+off; its base rules live in `TermsEditor.module.css`. HSTS comes from the TLS proxy and Django.

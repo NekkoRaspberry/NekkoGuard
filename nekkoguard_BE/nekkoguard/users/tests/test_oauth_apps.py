@@ -13,6 +13,9 @@ from urllib.parse import urlparse
 import pytest
 from rest_framework.test import APIClient
 
+from nekkoguard.conftest import enable_totp
+from nekkoguard.conftest import sign_in
+
 if TYPE_CHECKING:
     from django.test import Client
 
@@ -23,9 +26,9 @@ REDIRECT = "https://app.example.com/callback"
 
 @pytest.fixture
 def staff_api(admin_user: User) -> APIClient:
-    client = APIClient()
-    client.force_authenticate(admin_user)
-    return client
+    # Platform-level administration: an MFA-verified session (never a token).
+    enable_totp(admin_user)
+    return sign_in(APIClient(), admin_user)
 
 
 @pytest.fixture

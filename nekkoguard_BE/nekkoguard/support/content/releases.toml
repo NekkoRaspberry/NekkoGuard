@@ -1,0 +1,28 @@
+# NekkoGuard release notes — the ONLY source of Help › Release versions.
+#
+# Add one [[releases]] block per published release (any order: the API sorts
+# newest first). Only list what was actually released; unreleased work stays out.
+# Categories (all optional, empty ones are hidden): features, improvements,
+# fixes, security, breaking.
+
+[[releases]]
+version = "0.1.0-alpha.1"
+date = 2026-11-14
+type = "pre-release"      # "stable" or "pre-release"
+summary = "First alpha: accounts, sign-in security and the new React frontend."
+
+[releases.changes]
+features = [
+  "New React and TypeScript frontend with sign-in, sign-up and account pages.",
+  "Two-factor authentication (authenticator app and recovery codes).",
+  "Sign in with Google, GitHub or LinkedIn when enabled by the administrator.",
+  "Connected applications: NekkoGuard can act as an OAuth2 / OpenID Connect provider for approved apps.",
+]
+improvements = [
+  "Account flows run through a JSON API used by the frontend; legacy Django pages were simplified.",
+]
+security = [
+  "The Django administration requires two-factor authentication.",
+  "New accounts are limited to well-known email providers.",
+  "The public API token endpoint was removed (it bypassed email verification and two-factor authentication).",
+]

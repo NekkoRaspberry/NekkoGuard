@@ -4,7 +4,8 @@ import type { AllauthUser, Flow, FlowId, SessionEnvelope } from '@/api/types';
 export type AuthStatus = 'authenticated' | 'unauthenticated';
 
 /** Why the user was signed out — drives the message on the login page. */
-export type SignOutReason = 'user' | 'expired';
+/** Why the user was signed out (shown on the sign-in page). */
+export type SignOutReason = 'user' | 'expired' | 'terms_declined';
 
 export interface AuthContextValue {
   status: AuthStatus;
@@ -17,7 +18,7 @@ export interface AuthContextValue {
   lastSignOutReason: SignOutReason | null;
   /** Store the session state returned by any authentication endpoint. */
   applySession: (envelope: SessionEnvelope) => void;
-  signOut: () => Promise<void>;
+  signOut: (reason?: SignOutReason) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

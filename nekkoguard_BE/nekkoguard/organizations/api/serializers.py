@@ -1,0 +1,544 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+from typing import Any
+
+from django.contrib.auth import get_user_model
+from django.utils.translation import gettext_lazy as _
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
+from rest_framework import serializers
+
+from nekkoguard.organizations import access
+from nekkoguard.organizations import services
+
+# Imported at runtime: drf-spectacular evaluates the type hints below.
+from nekkoguard.organizations.access import OrganizationContext  # noqa: TC001
+from nekkoguard.organizations.invitations import effective_status
+from nekkoguard.organizations.models import ActivityEntry
+from nekkoguard.organizations.models import InvitationStatus
+from nekkoguard.organizations.models import MembershipStatus
+from nekkoguard.organizations.models import Network
+from nekkoguard.organizations.models import Organization
+from nekkoguard.organizations.models import OrganizationInvitation
+from nekkoguard.organizations.models import OrganizationMembership
+from nekkoguard.organizations.models import PermissionOverride
+from nekkoguard.organizations.models import Site
+from nekkoguard.organizations.models import Tenant
+from nekkoguard.organizations.models import TenantMembership
+from nekkoguard.organizations.roles import PERMISSION_CHOICES
+from nekkoguard.organizations.roles import Effect
+from nekkoguard.organizations.roles import OrganizationAccess
+from nekkoguard.organizations.roles import OrganizationRole
+from nekkoguard.organizations.roles import TenantRole
+from nekkoguard.organizations.roles import tenant_permissions_for
+
+if TYPE_CHECKING:
+    from django.db.models import Model
+    from django.db.models import QuerySet
+
+
+User = get_user_model()
+
+
+def ensure_unique_name(
+    queryset: QuerySet,
+    name: str,
+    instance: Model | None,
+    message: str,
+) -> None:
+    """Case-insensitive uniqueness inside a parent (mirrors the DB constraints)."""
+    if instance is not None:
+        queryset = queryset.exclude(pk=instance.pk)
+    if queryset.filter(name__iexact=name).exists():
+        raise serializers.ValidationError({"name": [message]})
+
+
+def find_active_user(email: str, *, field: str = "email"):
+    user = User.objects.filter(email__iexact=email.strip(), is_active=True).first()
+    if user is None:
+        raise serializers.ValidationError(
+            {
+                field: [
+                    _(
+                        "No NekkoGuard account uses this email. "
+                        "Ask them to sign up first.",
+                    ),
+                ],
+            },
+        )
+    return user
+
+
+class UserSummarySerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    email = serializers.EmailField(read_only=True)
+    name = serializers.CharField(read_only=True)
+
+
+# ---------------------------------------------------------------- tenants
+
+
+class TenantSerializer(serializers.ModelSerializer[Tenant]):
+    """A Tenant as seen by the caller (``role`` is null for Organization-only users)."""
+
+    role = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
+    #: True when the role administers the Tenant but this session has not passed MFA
+    #: (``permissions`` are then the Member rights).
+    mfa_required = serializers.SerializerMethodField()
+    #: The Tenant to open when the user has no remembered choice (see context.py).
+    is_default = serializers.SerializerMethodField()
+    #: The caller's organization scope here (all / selected / none): their tenant
+    #: rights apply only to those Organizations.
+    organization_access = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Tenant
+        fields = [
+            "id",
+            "name",
+            "description",
+            "support_email",
+            "role",
+            "permissions",
+            "mfa_required",
+            "organization_access",
+            "is_default",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def _membership(self, obj: Tenant) -> TenantMembership | None:
+        request = self.context.get("request")
+        if request is not None and access.is_superuser(request.user):
+            return access.superuser_membership(request.user, obj)
+        return self.context.get("tenant_memberships", {}).get(obj.pk)
+
+    def get_role(self, obj: Tenant) -> str | None:
+        membership = self._membership(obj)
+        return membership.role if membership else None
+
+    def _passed_mfa(self) -> bool:
+        if "_passed_mfa" not in self.context:
+            self.context["_passed_mfa"] = access.request_passed_mfa(
+                self.context.get("request"),
+            )
+        return self.context["_passed_mfa"]
+
+    def _role_and_effective(self, obj: Tenant) -> tuple[frozenset, frozenset]:
+        membership = self._membership(obj)
+        role = tenant_permissions_for(membership.role) if membership else frozenset()
+        return role, access.effective_tenant_permissions(
+            role,
+            passed_mfa=self._passed_mfa,
+        )
+
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_permissions(self, obj: Tenant) -> list[str]:
+        """Effective rights: Tenant administration only after MFA in this session."""
+        return sorted(self._role_and_effective(obj)[1])
+
+    def get_mfa_required(self, obj: Tenant) -> bool:
+        """The role administers this Tenant, but MFA is needed first."""
+        role, effective = self._role_and_effective(obj)
+        return role != effective
+
+    @extend_schema_field(
+        serializers.ChoiceField(choices=OrganizationAccess.choices, allow_null=True),
+    )
+    def get_organization_access(self, obj: Tenant) -> str | None:
+        membership = self._membership(obj)
+        return membership.organization_access if membership else None
+
+    def get_is_default(self, obj: Tenant) -> bool:
+        return obj.pk == self.context.get("default_tenant_id")
+
+    def validate_support_email(self, value: str) -> str:
+        return value.strip().lower()
+
+    def validate_name(self, value: str) -> str:
+        ensure_unique_name(
+            Tenant.objects.all(),
+            value,
+            self.instance,
+            _("A tenant with this name already exists."),
+        )
+        return value
+
+
+# ---------------------------------------------------------------- tenant members
+
+
+class TenantMembershipSerializer(serializers.ModelSerializer[TenantMembership]):
+    user = UserSummarySerializer(read_only=True)
+    selected_organizations = serializers.SerializerMethodField()
+    #: May the caller edit/remove this member (role rank and organization scope)?
+    can_manage = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TenantMembership
+        fields = [
+            "id",
+            "user",
+            "role",
+            "status",
+            "organization_access",
+            "default_organization_role",
+            "selected_organizations",
+            "can_manage",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.ListField(child=serializers.UUIDField()))
+    def get_selected_organizations(self, obj: TenantMembership) -> list[str]:
+        return sorted(str(g.organization_id) for g in obj.organization_grants.all())
+
+    def get_can_manage(self, obj: TenantMembership) -> bool:
+        actor = self.context.get("tenant_actor")
+        return actor is not None and services.may_manage_tenant_member(actor, obj)
+
+
+@extend_schema_field(OpenApiTypes.UUID)
+class _TenantOrganizationsField(serializers.PrimaryKeyRelatedField):
+    """Only Organizations of the URL Tenant are valid (others: 'does not exist')."""
+
+    def get_queryset(self):
+        return Organization.objects.filter(tenant=self.context["tenant"])
+
+
+class TenantMembershipWriteSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=TenantRole.choices, required=False)
+    status = serializers.ChoiceField(choices=MembershipStatus.choices, required=False)
+    organization_access = serializers.ChoiceField(
+        choices=OrganizationAccess.choices,
+        required=False,
+    )
+    default_organization_role = serializers.ChoiceField(
+        choices=[("", "—"), *OrganizationRole.choices],
+        required=False,
+    )
+    selected_organizations = _TenantOrganizationsField(many=True, required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if not attrs:
+            raise serializers.ValidationError(_("Send at least one field to change."))
+        return attrs
+
+
+class TenantMembershipCreateSerializer(TenantMembershipWriteSerializer):
+    email = serializers.EmailField()
+    role = serializers.ChoiceField(choices=TenantRole.choices)
+    status = None  # type: ignore[assignment]
+
+    def validate_email(self, value: str):
+        return find_active_user(value)
+
+
+# ---------------------------------------------------------------- organizations
+
+
+class MyOrganizationSerializer(serializers.ModelSerializer[Organization]):
+    """An Organization the caller can open, with its Tenant (organization switcher)."""
+
+    tenant = serializers.UUIDField(source="tenant_id", read_only=True)
+    tenant_name = serializers.CharField(source="tenant.name", read_only=True)
+
+    class Meta:
+        model = Organization
+        fields = ["id", "name", "tenant", "tenant_name"]
+        read_only_fields = fields
+
+
+class OrganizationSerializer(serializers.ModelSerializer[Organization]):
+    tenant = serializers.UUIDField(source="tenant_id", read_only=True)
+    has_access = serializers.SerializerMethodField()
+    #: Tenant administration rights apply here (Organization in the caller's scope).
+    can_administer = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Organization
+        fields = [
+            "id",
+            "tenant",
+            "name",
+            "description",
+            "is_active",
+            "has_access",
+            "can_administer",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "tenant", "created_at", "updated_at"]
+
+    def get_has_access(self, obj: Organization) -> bool:
+        return obj.pk in self.context.get("accessible_ids", set())
+
+    def get_can_administer(self, obj: Organization) -> bool:
+        if "can_administer" in self.context:  # detail view: decided by the view
+            return bool(self.context["can_administer"])
+        return obj.pk in self.context.get("administered_ids", set())
+
+    def validate_name(self, value: str) -> str:
+        ensure_unique_name(
+            Organization.objects.filter(tenant=self.context["tenant"]),
+            value,
+            self.instance,
+            _("An organization with this name already exists in this tenant."),
+        )
+        return value
+
+
+class DecisionSerializer(serializers.Serializer):
+    permission = serializers.CharField()
+    allowed = serializers.BooleanField()
+    source = serializers.CharField()
+
+
+class EffectiveAccessSerializer(serializers.Serializer):
+    """How one user reaches one Organization and what they may do there."""
+
+    user = UserSummarySerializer(read_only=True)
+    via_tenant = serializers.BooleanField()
+    organization_role = serializers.SerializerMethodField()
+    inherited_role = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
+    decisions = serializers.SerializerMethodField()
+
+    def get_organization_role(self, obj: OrganizationContext) -> str | None:
+        return obj.membership.role if obj.membership else None
+
+    def get_inherited_role(self, obj: OrganizationContext) -> str | None:
+        if obj.via_tenant and obj.tenant_membership is not None:
+            return obj.tenant_membership.default_organization_role
+        return None
+
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_permissions(self, obj: OrganizationContext) -> list[str]:
+        return sorted(obj.permissions)
+
+    @extend_schema_field(DecisionSerializer(many=True))
+    def get_decisions(self, obj: OrganizationContext) -> list[dict[str, Any]]:
+        return [
+            {"permission": d.permission.value, "allowed": d.allowed, "source": d.source}
+            for d in obj.decisions.values()
+        ]
+
+
+class OrganizationDetailSerializer(OrganizationSerializer):
+    """Detail view: adds the caller's own effective access (``null`` = none)."""
+
+    my_access = serializers.SerializerMethodField()
+    #: Rights the caller would have here are withheld until this session passes MFA.
+    mfa_required = serializers.SerializerMethodField()
+
+    class Meta(OrganizationSerializer.Meta):
+        fields = [*OrganizationSerializer.Meta.fields, "my_access", "mfa_required"]
+
+    def get_mfa_required(self, obj: Organization) -> bool:
+        return bool(self.context.get("mfa_required"))
+
+    def get_has_access(self, obj: Organization) -> bool:
+        return self.context.get("organization_context") is not None
+
+    @extend_schema_field(EffectiveAccessSerializer(allow_null=True))
+    def get_my_access(self, obj: Organization) -> dict[str, Any] | None:
+        context = self.context.get("organization_context")
+        return EffectiveAccessSerializer(context).data if context else None
+
+
+# ---------------------------------------------------------------- organization members
+
+
+class OrganizationMembershipSerializer(
+    serializers.ModelSerializer[OrganizationMembership],
+):
+    user = UserSummarySerializer(read_only=True)
+
+    class Meta:
+        model = OrganizationMembership
+        fields = ["id", "user", "role", "status", "created_at", "updated_at"]
+        read_only_fields = fields
+
+
+class OrganizationMembershipCreateSerializer(serializers.Serializer):
+    """Add member: an email only. Existing account → added; otherwise invited.
+
+    Always the default Viewer role (see invitations.py); change it afterwards."""
+
+    email = serializers.EmailField()
+
+
+class OrganizationInvitationSerializer(
+    serializers.ModelSerializer[OrganizationInvitation],
+):
+    """Never includes the token (only its hash is stored)."""
+
+    invited_by = UserSummarySerializer(read_only=True)
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrganizationInvitation
+        fields = [
+            "id",
+            "email",
+            "role",
+            "status",
+            "invited_by",
+            "expires_at",
+            "last_sent_at",
+            "accepted_at",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.ChoiceField(choices=InvitationStatus.choices))
+    def get_status(self, obj: OrganizationInvitation) -> str:
+        return effective_status(obj)
+
+
+class AddMemberResultSerializer(serializers.Serializer):
+    """Outcome of "Add member": ``added`` (existing account) or ``invited``."""
+
+    result = serializers.ChoiceField(choices=["added", "invited"])
+    membership = OrganizationMembershipSerializer(required=False)
+    invitation = OrganizationInvitationSerializer(required=False)
+
+
+class OrganizationMembershipUpdateSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=OrganizationRole.choices, required=False)
+    status = serializers.ChoiceField(choices=MembershipStatus.choices, required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if not attrs:
+            raise serializers.ValidationError(_("Send a role or a status."))
+        return attrs
+
+
+# ---------------------------------------------------------------- overrides
+
+
+class PermissionOverrideSerializer(serializers.ModelSerializer[PermissionOverride]):
+    user = UserSummarySerializer(read_only=True)
+
+    class Meta:
+        model = PermissionOverride
+        fields = ["id", "user", "permission", "effect", "created_at", "updated_at"]
+        read_only_fields = fields
+
+
+class PermissionOverrideWriteSerializer(serializers.Serializer):
+    """Upsert one override. To go back to INHERIT, delete the override."""
+
+    user = serializers.IntegerField()
+    permission = serializers.ChoiceField(choices=PERMISSION_CHOICES)
+    effect = serializers.ChoiceField(choices=Effect.choices)
+
+    def validate_user(self, value: int):
+        user = User.objects.filter(pk=value, is_active=True).first()
+        if user is None:
+            raise serializers.ValidationError(_("Unknown user."))
+        return user
+
+
+class PermissionOverrideUpdateSerializer(serializers.Serializer):
+    effect = serializers.ChoiceField(choices=Effect.choices)
+
+
+# ---------------------------------------------------------------- infrastructure
+
+
+class OrganizationScopedSerializer(serializers.ModelSerializer):
+    """Gives access to the Organization resolved by the view (never from the body)."""
+
+    @property
+    def organization(self) -> Organization:
+        return self.context["organization"]
+
+
+class SiteSerializer(OrganizationScopedSerializer):
+    # Annotated on reads; a row that was just created has none yet.
+    network_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = Site
+        fields = [
+            "id",
+            "name",
+            "description",
+            "network_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_name(self, value: str) -> str:
+        ensure_unique_name(
+            self.organization.sites.all(),
+            value,
+            self.instance,
+            _("A site with this name already exists."),
+        )
+        return value
+
+
+class NetworkSerializer(OrganizationScopedSerializer):
+    site = serializers.PrimaryKeyRelatedField(queryset=Site.objects.none())
+
+    class Meta:
+        model = Network
+        fields = [
+            "id",
+            "site",
+            "name",
+            "cidr",
+            "description",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if "organization" in self.context:
+            # Only this Organization's sites are valid parents: an id from another
+            # Organization is rejected as "does not exist" (nothing is revealed).
+            self.fields["site"].queryset = self.organization.sites.all()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        # Re-check when either the name or the parent changes (moving keeps the name).
+        if "site" in attrs or "name" in attrs:
+            site = attrs.get("site", getattr(self.instance, "site", None))
+            name = attrs.get("name", getattr(self.instance, "name", ""))
+            if site is not None:
+                ensure_unique_name(
+                    site.networks.all(),
+                    name,
+                    self.instance,
+                    _("A network with this name already exists at this site."),
+                )
+        return attrs
+
+
+# ---------------------------------------------------------------- activity
+
+
+class ActivityEntrySerializer(serializers.ModelSerializer[ActivityEntry]):
+    organization = serializers.UUIDField(source="organization_id", read_only=True)
+
+    class Meta:
+        model = ActivityEntry
+        fields = [
+            "id",
+            "organization",
+            "actor_email",
+            "action",
+            "target_type",
+            "target_id",
+            "target_name",
+            "details",
+            "created_at",
+        ]
+        read_only_fields = fields

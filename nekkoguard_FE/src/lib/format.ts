@@ -1,6 +1,7 @@
 const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
 const relativeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+const calendarDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'long', timeZone: 'UTC' });
 
 export function formatTime(timestamp: number): string {
   return timeFormatter.format(timestamp);
@@ -8,6 +9,12 @@ export function formatTime(timestamp: number): string {
 
 export function formatDateTime(timestamp: number): string {
   return dateTimeFormatter.format(timestamp);
+}
+
+/** A calendar date ("YYYY-MM-DD", no time zone) — e.g. a release or effective date. */
+export function formatCalendarDate(isoDate: string): string {
+  const timestamp = Date.parse(`${isoDate}T00:00:00Z`);
+  return Number.isNaN(timestamp) ? isoDate : calendarDateFormatter.format(timestamp);
 }
 
 export function formatRelative(timestamp: number, now = Date.now()): string {

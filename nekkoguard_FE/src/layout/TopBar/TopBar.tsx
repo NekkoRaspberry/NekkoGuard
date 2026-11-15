@@ -1,6 +1,7 @@
 import { ChevronRight, Menu } from 'lucide-react';
 import { Fragment } from 'react';
 import { Link, useMatches } from 'react-router';
+import { ContextBar } from '@/features/tenancy/components/ContextBar';
 import { UserMenu } from './UserMenu';
 import styles from './TopBar.module.css';
 
@@ -13,6 +14,11 @@ export interface Crumb {
 /** Route `handle` used to build the breadcrumb trail. */
 export interface RouteHandle {
   crumbs: Crumb[];
+  /**
+   * Page title for layouts that render the page header themselves (Settings).
+   * `{tenant}` in the description is replaced with the selected Tenant's name.
+   */
+  page?: { title: string; description: string };
 }
 
 function isRouteHandle(handle: unknown): handle is RouteHandle {
@@ -43,7 +49,7 @@ export function TopBar({ onOpenNavigation }: { onOpenNavigation: () => void }) {
         >
           <Menu size={18} />
         </button>
-        <nav aria-label="Breadcrumb">
+        <nav aria-label="Breadcrumb" className={styles.breadcrumbs}>
           <ol className={styles.crumbs}>
             {crumbs.map((crumb, index) => {
               const isLast = index === crumbs.length - 1;
@@ -65,7 +71,12 @@ export function TopBar({ onOpenNavigation }: { onOpenNavigation: () => void }) {
           </ol>
         </nav>
       </div>
-      <UserMenu />
+      <div className={styles.center}>
+        <ContextBar />
+      </div>
+      <div className={styles.right}>
+        <UserMenu />
+      </div>
     </header>
   );
 }

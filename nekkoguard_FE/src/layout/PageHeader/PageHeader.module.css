@@ -9,15 +9,16 @@
 }
 
 .text {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
 }
 
+/* Uses the full width of the page (no line-length cap). */
 .description {
   color: var(--text-secondary);
-  max-width: 70ch;
 }
 
 .actions {

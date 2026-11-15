@@ -29,10 +29,15 @@
 }
 
 .md {
-  max-width: 560px;
+  max-width: 600px;
+}
+
+.lg {
+  max-width: 880px;
 }
 
 .header {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
@@ -88,7 +93,10 @@
   color: var(--text-primary);
 }
 
+/* Shrinks (min-height: 0) so only the body scrolls: title and actions stay visible. */
 .body {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: var(--space-5);
   overflow-y: auto;
   display: flex;
@@ -97,6 +105,7 @@
 }
 
 .footer {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);

@@ -7,6 +7,7 @@ import tomllib
 from pathlib import Path
 
 import environ
+from django.utils.csp import CSP
 
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
 # nekkoguard/
@@ -107,6 +108,8 @@ THIRD_PARTY_APPS = [
     "allauth.headless",
     "allauth.mfa",
     "allauth.socialaccount",
+    # Active sessions: list and sign out sessions (Profile > Security).
+    "allauth.usersessions",
     # External sign-in providers (each is active only when its credentials are set,
     # see SOCIALACCOUNT_PROVIDERS below). LinkedIn uses OpenID Connect.
     "allauth.socialaccount.providers.google",
@@ -122,6 +125,9 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     "nekkoguard.users",
+    "nekkoguard.organizations",
+    "nekkoguard.support",
+    "nekkoguard.security",
     # Your stuff: custom apps go here
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
@@ -172,6 +178,10 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/dev/ref/settings/#middleware
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Content-Security-Policy (SECURE_CSP) on Django's own responses (API, admin, consent).
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
+    # Permissions-Policy and Cross-Origin-Resource-Policy (no Django setting for them).
+    "nekkoguard.security.middleware.SecurityHeadersMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -182,6 +192,13 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    # "Last active" of the sessions list, throttled (replaces allauth's per-request
+    # middleware). Does nothing unless USERSESSIONS_TRACK_ACTIVITY is on.
+    "nekkoguard.users.session_activity.SessionActivityMiddleware",
+    # Superuser "view as user" (read-only): after authentication. See users/impersonation.py.
+    "nekkoguard.users.impersonation.ImpersonationMiddleware",
+    # Tenant Terms of Service must be accepted before using the API. See support/middleware.py.
+    "nekkoguard.support.middleware.TermsAcceptanceMiddleware",
 ]
 
 # STATIC
@@ -249,15 +266,68 @@ FIXTURE_DIRS = (str(APPS_DIR / "fixtures"),)
 
 # SECURITY
 # ------------------------------------------------------------------------------
+# Production adds Secure + __Secure- names, HTTPS redirect and HSTS (production.py);
+# config/security checks refuse to start production with insecure values.
 # https://docs.djangoproject.com/en/dev/ref/settings/#session-cookie-httponly
 SESSION_COOKIE_HTTPONLY = True
+# Lax: sent on same-site requests and top-level navigations (needed when Google,
+# GitHub or LinkedIn send the user back after sign-in), never on cross-site POSTs.
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+# Host-only cookies (no Domain attribute): never shared with other subdomains.
+SESSION_COOKIE_DOMAIN = None
+CSRF_COOKIE_DOMAIN = None
+# The session cookie is dropped when the browser closes (what the Security page tells
+# users); 7 days is the server-side maximum either way. Signing out deletes it.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = env.bool(
+    "DJANGO_SESSION_EXPIRE_AT_BROWSER_CLOSE",
+    default=True,
+)
+SESSION_COOKIE_AGE = env.int("DJANGO_SESSION_COOKIE_AGE", default=7 * 24 * 60 * 60)
+# Origins allowed to send unsafe requests with the CSRF token (only needed when the
+# frontend is served from another origin, e.g. "https://app.example.com").
+CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
+# https://docs.djangoproject.com/en/dev/ref/settings/#secure-referrer-policy
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+SECURE_CONTENT_TYPE_NOSNIFF = True
+# Content-Security-Policy for Django's responses (the React app has its own, set by
+# the frontend's nginx). Django serves JSON, the admin, the OAuth consent page and
+# a few allauth/error pages; base.html loads Bootstrap from cdnjs. No inline scripts,
+# no eval. form-action is left out on purpose: the OAuth consent form redirects to
+# each connected application's own redirect URL. Views may set their own policy
+# (e.g. the sandboxed appearance images).
+SECURE_CSP = {
+    "default-src": [CSP.SELF],
+    "script-src": [CSP.SELF, "https://cdnjs.cloudflare.com"],
+    "style-src": [CSP.SELF, "https://cdnjs.cloudflare.com"],
+    "img-src": [CSP.SELF, "data:"],
+    "font-src": [CSP.SELF, "https://cdnjs.cloudflare.com"],
+    "connect-src": [CSP.SELF],
+    "object-src": [CSP.NONE],
+    "base-uri": [CSP.SELF],
+    "frame-ancestors": [CSP.NONE],
+}
 # https://docs.djangoproject.com/en/dev/ref/settings/#csrf-cookie-httponly
 # False: the React frontend (same origin) must read the CSRF token from this cookie and
 # send it back as the X-CSRFToken header. Django's docs note an HttpOnly CSRF cookie adds no
 # practical protection; the session cookie itself stays HttpOnly.
 CSRF_COOKIE_HTTPONLY = False
 # https://docs.djangoproject.com/en/dev/ref/settings/#x-frame-options
+# (kept for old browsers; CSP frame-ancestors 'none' is the modern equivalent)
 X_FRAME_OPTIONS = "DENY"
+
+# Proxies in front of Django whose X-Forwarded-For entries are trusted for the client
+# IP (rate limits, audit): 1 = the frontend's nginx; 2 = Traefik + nginx. Entries a
+# client adds itself are never trusted.
+TRUSTED_PROXIES = env.int("DJANGO_TRUSTED_PROXIES", default=1)
+ALLAUTH_TRUSTED_PROXY_COUNT = TRUSTED_PROXIES
+
+# CREDENTIAL ENCRYPTION (integration secrets at rest — see nekkoguard/security/crypto.py)
+# ------------------------------------------------------------------------------
+# "<key id>:<base64 32-byte key>,…" — never committed; first = active unless set below.
+CREDENTIAL_ENCRYPTION_KEYS = env.list("DJANGO_CREDENTIAL_KEYS", default=[])
+CREDENTIAL_ENCRYPTION_ACTIVE_KEY = env("DJANGO_CREDENTIAL_ACTIVE_KEY", default="")
 
 # EMAIL
 # ------------------------------------------------------------------------------
@@ -278,6 +348,17 @@ EMAIL_TIMEOUT = 5
 # Production overrides this with "/" (frontend and backend share one domain).
 FRONTEND_URL = env("DJANGO_FRONTEND_URL", default="")
 FRONTEND_PORT = env.int("DJANGO_FRONTEND_PORT", default=8080)
+
+# ORGANIZATION INVITATIONS
+# ------------------------------------------------------------------------------
+# How long an emailed invitation link stays valid (resending starts a new period).
+ORGANIZATION_INVITATION_TTL_DAYS = env.int("DJANGO_INVITATION_TTL_DAYS", default=7)
+
+# BUG REPORTS
+# ------------------------------------------------------------------------------
+# Where bug reports go when the reporter's Tenant has no support email of its own.
+# Empty: such reports are stored (Django admin) but not emailed.
+BUG_REPORT_EMAIL = env("DJANGO_BUG_REPORT_EMAIL", default="")
 
 # ADMIN
 # ------------------------------------------------------------------------------
@@ -367,6 +448,22 @@ ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 # https://docs.allauth.org/en/latest/account/configuration.html
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+# Sign-in, sign-up, password reset and MFA codes go through allauth (not DRF), which
+# rate-limits them itself in the default cache (Redis). "ip" uses the same trusted
+# proxy count as DRF; "key" is the email address. Failed sign-ins and wrong MFA codes
+# share "login_failed". Values stated explicitly here so they are reviewed with the
+# rest of the security settings.
+ACCOUNT_RATE_LIMITS = {
+    "login": "30/m/ip",
+    "login_failed": "10/m/ip,5/5m/key",
+    "signup": "20/m/ip",
+    "reset_password": "20/m/ip,5/m/key",
+    "reset_password_from_key": "20/m/ip",
+    "change_password": "5/m/user",
+    "manage_email": "10/m/user",
+    "reauthenticate": "10/m/user",
+    "confirm_email": "1/3m/key",
+}
 # New accounts (email signup, provider signup, adding an email) are only accepted
 # from these well-known email providers. Existing accounts are not affected.
 # Override with a comma-separated DJANGO_ACCOUNT_ALLOWED_EMAIL_DOMAINS; set it to an
@@ -465,6 +562,20 @@ SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 SOCIALACCOUNT_QUERY_EMAIL = True
 # https://docs.allauth.org/en/latest/mfa/configuration.html
 MFA_TOTP_ISSUER = "NekkoGuard"
+# Encrypts authenticator secrets at rest with DJANGO_CREDENTIAL_KEYS (users/adapters.py).
+MFA_ADAPTER = "nekkoguard.users.adapters.MFAAdapter"
+# https://docs.allauth.org/en/latest/usersessions/configuration.html
+# Sessions are recorded at sign-in (device, address, time). "Last active" is off by
+# default; when on, it is written at most once per interval per session
+# (users/session_activity.py), never on every request.
+USERSESSIONS_TRACK_ACTIVITY = env.bool(
+    "DJANGO_USERSESSIONS_TRACK_ACTIVITY",
+    default=False,
+)
+USERSESSIONS_ACTIVITY_INTERVAL = env.int(
+    "DJANGO_USERSESSIONS_ACTIVITY_INTERVAL",
+    default=10 * 60,
+)
 
 # django-allauth headless (JSON auth API for the React frontend)
 # ------------------------------------------------------------------------------
@@ -497,6 +608,43 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # 429 responses with Retry-After and a "code"; 403 mfa_required (security/exceptions.py).
+    "EXCEPTION_HANDLER": "nekkoguard.security.exceptions.exception_handler",
+    # Client IP = the Nth-from-last X-Forwarded-For entry (see TRUSTED_PROXIES).
+    "NUM_PROXIES": TRUSTED_PROXIES,
+    # Every API view (security/throttling.py). Views add a stricter scope for
+    # sensitive operations (SensitiveThrottleMixin + throttle_scope).
+    "DEFAULT_THROTTLE_CLASSES": (
+        "nekkoguard.security.throttling.AnonRateThrottle",
+        "nekkoguard.security.throttling.UserRateThrottle",
+        "nekkoguard.security.throttling.IPRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        # General use: generous for a person clicking around (the SPA makes several
+        # calls per page), low enough to stop scraping and scripted abuse.
+        "anon": env("DJANGO_THROTTLE_ANON", default="60/minute"),
+        "user": env("DJANGO_THROTTLE_USER", default="600/minute"),
+        "ip": env("DJANGO_THROTTLE_IP", default="1200/minute"),
+        # Sensitive operations (fail closed when Redis is down).
+        # Adding members / sending invitation emails, per administrator.
+        "member_invitations": "60/hour",
+        # Opening / accepting invitation links, per user or client address.
+        "invitation_links": "60/hour",
+        # Bug reports, per user.
+        "bug_reports": "10/hour",
+        # Changing memberships, roles, access and permission overrides.
+        "access_changes": "120/hour",
+        # Editing tenants and organizations (details, creation, deactivation).
+        "admin_changes": "120/hour",
+        # Accepting / declining Terms of Service.
+        "terms_responses": "30/hour",
+        # Writing and publishing Terms of Service.
+        "terms_admin": "120/hour",
+        # Uploading or resetting branding.
+        "appearance_changes": "120/hour",
+        # Starting / stopping "view as user" (superusers).
+        "impersonation": "60/hour",
+    },
 }
 
 # django-cors-headers - https://github.com/adamchainz/django-cors-headers#setup
@@ -510,6 +658,10 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
     "SCHEMA_PATH_PREFIX": "/api/",
+    "ENUM_NAME_OVERRIDES": {
+        "TenantRoleEnum": "nekkoguard.organizations.roles.TenantRole",
+        "OrganizationRoleEnum": "nekkoguard.organizations.roles.OrganizationRole",
+    },
 }
 # Connected applications: NekkoGuard as an OAuth2 / OpenID Connect provider
 # ------------------------------------------------------------------------------
