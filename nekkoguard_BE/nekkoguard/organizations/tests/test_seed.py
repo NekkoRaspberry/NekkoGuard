@@ -22,7 +22,6 @@ from nekkoguard.organizations.models import Tenant
 from nekkoguard.organizations.models import TenantMembership
 from nekkoguard.organizations.roles import Permission
 from nekkoguard.organizations.roles import TenantPermission
-from nekkoguard.organizations.roles import TenantRole
 from nekkoguard.users.tests.factories import UserFactory
 
 from .factories import TenantFactory
@@ -72,7 +71,6 @@ def test_empty_database_gets_the_demo_environment():
 
 def test_demo_users_get_no_automatic_administration():
     demo.seed_demo(password="x-dev-only")  # noqa: S106
-    assert not TenantMembership.objects.filter(role=TenantRole.OWNER).exists()
     assert not User.objects.filter(
         email__in=demo.DEMO_EMAILS,
         is_staff=True,

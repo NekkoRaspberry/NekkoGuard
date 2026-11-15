@@ -4,6 +4,20 @@
   padding: 0 var(--space-5);
 }
 
+/* Table actions (Excel export), right-aligned above the header. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.exportError {
+  font-size: var(--fs-label);
+  color: var(--danger);
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -20,6 +34,42 @@
   color: var(--text-muted);
   border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
+}
+
+/* Sortable header: same look as a plain header, plus a direction indicator. */
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+}
+
+.sortButton:hover,
+.sortActive {
+  color: var(--text-secondary);
+}
+
+.sortButton:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.sortIcon {
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+.sortActive .sortIcon {
+  opacity: 1;
+  color: var(--primary-hover);
 }
 
 .table td {

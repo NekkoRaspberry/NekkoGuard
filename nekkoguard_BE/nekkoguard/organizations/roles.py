@@ -12,7 +12,9 @@ Two separate permission families:
 Views ask for a permission, never for a role. Custom roles later only need a new
 source of role → permission sets; the resolver keeps the same interface.
 
-Platform Administrator is not a role here: it is ``User.is_staff``.
+Platform Administrator is not a role here: it is ``User.is_staff``. There is no
+Owner role: Administrator is the highest role in a Tenant and in an Organization;
+anything above it (e.g. fixing a Tenant's last administrator) is for superusers.
 """
 
 from __future__ import annotations
@@ -31,13 +33,11 @@ if TYPE_CHECKING:
 
 
 class TenantRole(models.TextChoices):
-    OWNER = "owner", _("Tenant Owner")
     ADMIN = "admin", _("Tenant Administrator")
     MEMBER = "member", _("Tenant Member")
 
 
 class OrganizationRole(models.TextChoices):
-    OWNER = "owner", _("Organization Owner")
     ADMIN = "admin", _("Organization Administrator")
     SECURITY_ANALYST = "security_analyst", _("Security Analyst")
     OPERATOR = "operator", _("Operator")
@@ -65,6 +65,9 @@ class TenantPermission(StrEnum):
     MANAGE_MEMBERS = "tenant.members.manage"
     MANAGE_ORGANIZATIONS = "tenant.organizations.manage"
     VIEW_ACTIVITY = "tenant.activity.view"
+    #: Appearance Admin: branding/look & feel of the Tenant and of every Organization
+    #: in it. Visual customization only — it never grants infrastructure access.
+    MANAGE_APPEARANCE = "tenant.appearance.manage"
 
 
 class Permission(StrEnum):
@@ -76,38 +79,46 @@ class Permission(StrEnum):
     MANAGE_SITES = "sites.manage"
     VIEW_NETWORKS = "networks.view"
     MANAGE_NETWORKS = "networks.manage"
+    #: Read-only: the Organization's members, invitations and permissions
+    #: (effective access, overrides). Changing them needs MANAGE_MEMBERS.
+    VIEW_MEMBERS = "members.view"
     VIEW_ACTIVITY = "activity.view"
+    #: Appearance Admin of one Organization (branding only, no infrastructure).
+    MANAGE_APPEARANCE = "organization.appearance.manage"
 
 
 PERMISSION_CHOICES = [(p.value, p.value) for p in Permission]
 
-_READ = frozenset({Permission.VIEW_SITES, Permission.VIEW_NETWORKS})
+# Every role may look (read-only) at sites, networks, members, permissions and activity.
+_READ = frozenset(
+    {
+        Permission.VIEW_SITES,
+        Permission.VIEW_NETWORKS,
+        Permission.VIEW_MEMBERS,
+        Permission.VIEW_ACTIVITY,
+    },
+)
 
 TENANT_ROLE_PERMISSIONS: dict[str, frozenset[TenantPermission]] = {
-    TenantRole.OWNER: frozenset(TenantPermission),
     TenantRole.ADMIN: frozenset(TenantPermission),
     TenantRole.MEMBER: frozenset({TenantPermission.VIEW}),
 }
 
 ORGANIZATION_ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
-    OrganizationRole.OWNER: frozenset(Permission),
     OrganizationRole.ADMIN: frozenset(Permission),
     # Domain rights (finding triage, container actions…) are added with those modules.
-    OrganizationRole.SECURITY_ANALYST: _READ | {Permission.VIEW_ACTIVITY},
+    OrganizationRole.SECURITY_ANALYST: _READ,
     OrganizationRole.OPERATOR: _READ,
     OrganizationRole.VIEWER: _READ,
 }
 
 # Which roles a holder of a role may hand out, change or remove.
-# Nobody grants a role above their own: only owners create owners.
+# Nobody grants a role above their own (Administrator is the highest).
 TENANT_ASSIGNABLE: dict[str, frozenset[str]] = {
-    TenantRole.OWNER: frozenset(TenantRole.values),
-    TenantRole.ADMIN: frozenset(TenantRole.values) - {TenantRole.OWNER},
+    TenantRole.ADMIN: frozenset(TenantRole.values),
 }
 ORGANIZATION_ASSIGNABLE: dict[str, frozenset[str]] = {
-    OrganizationRole.OWNER: frozenset(OrganizationRole.values),
-    OrganizationRole.ADMIN: frozenset(OrganizationRole.values)
-    - {OrganizationRole.OWNER},
+    OrganizationRole.ADMIN: frozenset(OrganizationRole.values),
 }
 
 

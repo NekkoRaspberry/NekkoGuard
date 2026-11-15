@@ -5,6 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from .admin_auth import install as install_admin_2fa
 from .forms import UserAdminChangeForm
 from .forms import UserAdminCreationForm
+from .models import ImpersonationEvent
 from .models import User
 
 # Admin sign-in goes through the React frontend and requires 2FA (see admin_auth.py).
@@ -44,3 +45,21 @@ class UserAdmin(auth_admin.UserAdmin):
             },
         ),
     )
+
+
+@admin.register(ImpersonationEvent)
+class ImpersonationEventAdmin(admin.ModelAdmin):
+    """Audit trail of superusers viewing the app as other users: read-only."""
+
+    list_display = ["created_at", "actor_email", "action", "target_email"]
+    list_filter = ["action"]
+    search_fields = ["actor_email", "target_email"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

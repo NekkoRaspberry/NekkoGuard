@@ -16,14 +16,16 @@ The frontend reflects what the backend implements today (user accounts and multi
 | Verify email (link from email) | `/verify-email/:key` | `…/auth/email/verify` |
 | Forgot / reset password | `/forgot-password`, `/reset-password/:key` | `…/auth/password/request`, `…/auth/password/reset` |
 | Overview | `/` | `GET /api/users/me/`, `…/account/authenticators`, WebSocket `ping` → `pong!` |
-| Profile | `/account/profile` | `GET /api/users/me/`, `PATCH /api/users/{pk}/` (`name`) |
-| Security | `/account/security` | `…/account/password/change`, `…/account/email`, `…/account/authenticators/*` (TOTP, recovery codes), `DELETE …/auth/session` |
-| Connected applications | `/account/connected-apps` | `/api/oauth/authorized-apps/` (all users), `/api/oauth/applications/` (staff), consent page `/o/authorize/` |
 | Sites & networks | `/infrastructure` | `/api/tenants/{t}/organizations/{o}/sites/`, `…/networks/` |
-| Organization settings | `/settings/organization` (+ `/members`, `/access`, `/activity`) | `/api/tenants/{t}/organizations/{o}/` (+ `members/`, `overrides/`, `access/`, `activity/`) |
-| Tenant settings | `/settings/tenant` (+ `/organizations`, `/organizations/:orgId`, `/members`, `/activity`) | `/api/tenants/{t}/` (+ `members/`, `organizations/`, `activity/`) |
-| Platform tenants (staff) | `/settings/platform/tenants` | `/api/platform/tenants/` |
+| Settings → Tenant (selected Tenant) | `/settings/tenant` (+ `/organizations`, `/organizations/manage`, `/organizations/manage/appearance`, `/members`, `/activity`, `/appearance`) | `/api/tenants/{t}/` (+ `members/`, `organizations/`, `activity/`, `appearance/`) |
+| Settings → Organization (selected Organization) | `/settings/organization` (+ `/members`, `/access` = Permissions, `/activity`, `/appearance`) | `/api/tenants/{t}/organizations/{o}/` (+ `members/` (add by email), `invitations/`, `overrides/`, `access/`, `activity/?ordering=`, `appearance/`) |
+| Organization invitation (link from email) | `/invitations/:token` | `GET /api/invitations/{token}/`, `POST …/accept/` |
+| Settings → Profile → Personal information | `/settings/profile` | `GET /api/users/me/`, `PATCH /api/users/{pk}/` (`name`) |
+| Settings → Profile → Security | `/settings/profile/security` | `…/account/password/change`, `…/account/email`, `…/account/authenticators/*` (TOTP, recovery codes), `DELETE …/auth/session` |
+| Settings → Profile → Connected applications | `/settings/profile/applications` | `/api/oauth/authorized-apps/` (all users), `/api/oauth/applications/` (staff), consent page `/o/authorize/` |
 | Google / GitHub / LinkedIn sign-in | `/login`, `/auth/callback`, `/signup/provider` | allauth provider flow; buttons appear only for providers configured in the backend env |
+
+Old `/account/*` URLs redirect to their Settings → Profile page. Platform administration (creating and deactivating Tenants) is not part of the web app: use Django admin.
 
 Authentication uses **django-allauth headless** (`/_allauth/browser/v1/…`), browser client:
 
@@ -55,8 +57,10 @@ src/
 ## Tenant & organization context
 
 - The top bar selects **Tenant → Organization → Site → Network**. Only what the backend lists for the
-  user is offered; the selection lives in the URL (`?tenant=&org=&site=&network=`), so refresh,
-  back/forward and shared links work. Ids the user cannot access are removed from the URL.
+  user is offered. The selection is **never in the URL**: it lives in memory and is remembered per
+  user in this browser, so a refresh reopens it. Pages never carry tenant/organization ids
+  (the organization managed from Settings → Tenant is passed as navigation state). Ids the user
+  can no longer access are dropped, with a notice.
 - Hooks: `useTenancy()`, `useCurrentTenant()`, `useCurrentOrganization()`, `useEffectivePermissions()`,
   `useCan('sites.manage')`, `useCanTenant('tenant.members.manage')`. They only hide/disable UI — the
   backend resolves and enforces every permission.

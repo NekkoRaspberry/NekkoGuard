@@ -8,11 +8,14 @@ import { Banner } from '@/components/Banner/Banner';
 import { Button } from '@/components/Button/Button';
 import { Card, CardBody, CardHeader } from '@/components/Card/Card';
 import { DataTable, type Column } from '@/components/DataTable/DataTable';
+import { TableExportButton } from '@/components/DataTable/TableExport';
+import { useTableExport } from '@/components/DataTable/useTableExport';
 import { ErrorState } from '@/components/ErrorState/ErrorState';
 import { ConfirmDialog } from '@/components/Modal/ConfirmDialog';
+import { SelectField } from '@/components/SelectField/SelectField';
 import { Skeleton } from '@/components/Skeleton/Skeleton';
 import { useToast } from '@/components/Toast/useToast';
-import { useCan, useTenancy } from '@/features/tenancy/hooks';
+import { useCan, useOrganizationName, useTenancy } from '@/features/tenancy/hooks';
 import { PERMISSIONS } from '@/features/tenancy/model';
 import type { OrganizationScope } from '@/features/tenancy/components/ScopeGate';
 import styles from '@/features/tenancy/components/Management.module.css';
@@ -20,16 +23,18 @@ import { NetworkDialog } from './NetworkDialog';
 
 type Editing = { network?: NetworkDto } | null;
 
-/** Networks of the current Organization, filtered by the Site chosen in the context bar. */
+/** Networks of the current Organization, optionally filtered by Site (filter in this card). */
 export function NetworksCard({ scope }: { scope: OrganizationScope }) {
   const { tenantId, orgId } = scope;
-  const { selection, sites } = useTenancy();
+  const organizationName = useOrganizationName(tenantId, orgId);
+  const exporter = useTableExport();
+  const { sites } = useTenancy();
   const queryClient = useQueryClient();
   const { notify } = useToast();
   const canManage = useCan(PERMISSIONS.manageNetworks);
   const [editing, setEditing] = useState<Editing>(null);
   const [toDelete, setToDelete] = useState<NetworkDto | null>(null);
-  const siteFilter = selection.site;
+  const [siteFilter, setSiteFilter] = useState<string | null>(null);
 
   const networks = useQuery({
     queryKey: queryKeys.networks(tenantId, orgId, siteFilter),
@@ -57,6 +62,7 @@ export function NetworksCard({ scope }: { scope: OrganizationScope }) {
     {
       key: 'name',
       header: 'Network',
+      sortValue: (network) => network.name,
       render: (network) => (
         <span className={styles.twoLine}>
           <span className={styles.primary}>{network.name}</span>
@@ -67,9 +73,10 @@ export function NetworksCard({ scope }: { scope: OrganizationScope }) {
     {
       key: 'cidr',
       header: 'Range',
+      sortValue: (network) => network.cidr,
       render: (network) => (network.cidr ? <span className={styles.mono}>{network.cidr}</span> : <span className={styles.muted}>—</span>),
     },
-    { key: 'site', header: 'Site', render: (network) => siteName(network.site), secondary: true },
+    { key: 'site', header: 'Site', render: (network) => siteName(network.site), sortValue: (network) => siteName(network.site), secondary: true },
   ];
   if (canManage) {
     columns.push({
@@ -97,13 +104,24 @@ export function NetworksCard({ scope }: { scope: OrganizationScope }) {
         icon={<Network size={16} />}
         title={filterName ? `Networks at ${filterName}` : 'Networks'}
         titleId="networks-title"
-        description={filterName ? 'Filtered by the site chosen above.' : 'Address ranges of every site.'}
+        description={filterName ? 'Filtered by site.' : 'Address ranges of every site.'}
         actions={
-          canAdd && (
-            <Button size="sm" variant="primary" leftIcon={<Plus size={14} />} onClick={() => setEditing({})}>
-              Add network
-            </Button>
-          )
+          <span className={styles.rowActions}>
+            {sites && sites.length > 1 && (
+              <SelectField
+                label="Site"
+                value={siteFilter ?? ''}
+                options={[{ value: '', label: 'All sites' }, ...sites.map((site) => ({ value: site.id, label: site.name }))]}
+                onChange={(value) => setSiteFilter(value || null)}
+              />
+            )}
+            <TableExportButton exporter={exporter} />
+            {canAdd && (
+              <Button size="sm" variant="primary" leftIcon={<Plus size={14} />} onClick={() => setEditing({})}>
+                Add network
+              </Button>
+            )}
+          </span>
         }
       />
       <CardBody>
@@ -119,6 +137,8 @@ export function NetworksCard({ scope }: { scope: OrganizationScope }) {
             rows={networks.data}
             rowKey={(network) => network.id}
             empty="No networks yet."
+            exportOwner={organizationName}
+            exporter={exporter}
           />
         )}
       </CardBody>

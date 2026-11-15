@@ -20,7 +20,13 @@ from .conftest import build_world
 
 pytestmark = pytest.mark.django_db
 
-READ = {Permission.VIEW_SITES, Permission.VIEW_NETWORKS}
+# What every role may look at (read-only).
+READ = {
+    Permission.VIEW_SITES,
+    Permission.VIEW_NETWORKS,
+    Permission.VIEW_MEMBERS,
+    Permission.VIEW_ACTIVITY,
+}
 
 
 def ctx(world: World, user: str, org: str):
@@ -41,9 +47,22 @@ class TestScenarioATenantAdministrator:
         assert ta.can(TenantPermission.MANAGE_MEMBERS)
         assert ta.can(TenantPermission.MANAGE_ORGANIZATIONS)
 
-    def test_tenant_administration_is_not_infrastructure_access(self, world):
-        assert ctx(world, "john", "a1") is None
-        assert ctx(world, "john", "a2") is None
+    def test_tenant_rights_apply_only_inside_the_organization_scope(
+        self,
+        world,
+        scoped_admin,
+        no_org_admin,
+    ):
+        john = access.get_tenant_access(world.users["john"], world.tenant_a)
+        assert john.administers(world.a1)
+        assert john.administers(world.a2)  # organization access "All"
+        scoped = access.get_tenant_access(scoped_admin, world.tenant_a)
+        assert scoped.administers(world.a1)
+        assert not scoped.administers(world.a2)  # not selected
+        none = access.get_tenant_access(no_org_admin, world.tenant_a)
+        assert not none.administers(world.a1)
+        assert not none.administers(world.a2)
+        assert access.get_organization_access(no_org_admin, world.a1) is None
 
 
 class TestScenarioBInheritedSelectedAccess:
@@ -158,22 +177,23 @@ class TestPermissionStates:
             user=world.users["mary"],
             role=OrganizationRole.VIEWER,
         )
-        _override(world, "mary", "a1", Permission.VIEW_ACTIVITY, Effect.GRANT)
+        _override(world, "mary", "a1", Permission.MANAGE_SITES, Effect.GRANT)
         context = ctx(world, "mary", "a1")
         assert (
             context.decisions[Permission.VIEW_SITES].source == Source.ORGANIZATION_ROLE
         )
-        assert context.can(Permission.VIEW_ACTIVITY)
-        assert not context.can(Permission.MANAGE_SITES)
+        assert context.decisions[Permission.MANAGE_SITES].source == Source.OVERRIDE
+        assert context.can(Permission.MANAGE_SITES)
+        assert not context.can(Permission.MANAGE_NETWORKS)
 
     def test_explicit_deny_beats_direct_and_inherited_grant(self, world):
         OrganizationMembership.objects.create(
             organization=world.a1,
-            user=world.users["owner"],
-            role=OrganizationRole.OWNER,
+            user=world.users["ada"],
+            role=OrganizationRole.ADMIN,
         )
-        _override(world, "owner", "a1", Permission.MANAGE_SITES, Effect.DENY)
-        assert not ctx(world, "owner", "a1").can(Permission.MANAGE_SITES)
+        _override(world, "ada", "a1", Permission.MANAGE_SITES, Effect.DENY)
+        assert not ctx(world, "ada", "a1").can(Permission.MANAGE_SITES)
 
     def test_override_never_creates_access(self, world):
         _override(world, "david", "a1", Permission.VIEW_SITES, Effect.GRANT)
@@ -209,7 +229,7 @@ class TestPolicies:
 
     def test_all_organizations_never_crosses_tenants(self, world):
         assert ctx(world, "carl", "b1") is None
-        assert ctx(world, "owner", "b1") is None
+        assert ctx(world, "ada", "b1") is None
 
     def test_new_organization_reached_by_all_policy_only(self, world):
         from .factories import OrganizationFactory  # noqa: PLC0415
@@ -261,23 +281,23 @@ class TestRestrictions:
         assert ctx(world, "peter", "a2") is None
 
     def test_inactive_user(self, world):
-        user = world.users["owner"]
+        user = world.users["ada"]
         user.is_active = False
         user.save()
-        assert ctx(world, "owner", "a1") is None
-        assert tenant_access(world, "owner") is None
+        assert ctx(world, "ada", "a1") is None
+        assert tenant_access(world, "ada") is None
 
     def test_inactive_organization(self, world):
         world.a1.is_active = False
         world.a1.save()
-        assert ctx(world, "owner", "a1") is None
+        assert ctx(world, "ada", "a1") is None
 
     def test_inactive_tenant(self, world):
         world.tenant_a.is_active = False
         world.tenant_a.save()
         world.a2.refresh_from_db()
         assert ctx(world, "peter", "a2") is None
-        assert tenant_access(world, "owner") is None
+        assert tenant_access(world, "ada") is None
 
 
 # ---------------------------------------------------------------- consistency

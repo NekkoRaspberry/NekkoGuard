@@ -12,7 +12,11 @@ interface ModalProps {
   icon?: ReactNode;
   children?: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md';
+  /**
+   * sm: confirmations · md: forms · lg: tables and permission lists.
+   * Always capped by the viewport; long content scrolls inside, header and footer stay.
+   */
+  size?: 'sm' | 'md' | 'lg';
   /** Block closing by Esc / outside click / × (e.g. while showing codes that must be saved). */
   dismissible?: boolean;
 }

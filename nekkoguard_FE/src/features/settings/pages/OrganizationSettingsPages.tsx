@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { queryKeys } from '@/api/queryKeys';
 import { tenancyApi } from '@/api/tenancy';
-import { PageHeader } from '@/layout/PageHeader/PageHeader';
 import { useTenancy } from '@/features/tenancy/hooks';
 import { RequireOrganization, type OrganizationScope } from '@/features/tenancy/components/ScopeGate';
 import styles from '@/features/tenancy/components/Management.module.css';
@@ -12,20 +11,15 @@ import { MyAccessCard } from '../components/MyAccessCard';
 import { OrganizationDetailsCard } from '../components/OrganizationDetailsCard';
 import { OrganizationMembersCard } from '../components/OrganizationMembersCard';
 
-/** Settings of the Organization selected in the context bar. */
+/** Settings of the Organization selected in the context bar (title: route handle). */
 function OrganizationPage({
-  title,
-  description,
   children,
 }: {
-  title: string;
-  description: string;
   children: (scope: OrganizationScope, can: OrganizationCapabilities) => ReactNode;
 }) {
   const { tenantPermissions } = useTenancy();
   return (
     <div className={styles.stack}>
-      <PageHeader title={title} description={description} />
       <RequireOrganization>
         {(scope) => children(scope, organizationCapabilities(scope.organization, tenantPermissions))}
       </RequireOrganization>
@@ -39,11 +33,11 @@ function NoPermission({ what }: { what: string }) {
 
 export function OrganizationDetailsPage() {
   return (
-    <OrganizationPage title="Organization" description="Details of the current organization and your access to it.">
+    <OrganizationPage>
       {(scope, can) => (
         <>
           <OrganizationDetailsCard tenantId={scope.tenantId} organization={scope.organization} capabilities={can} />
-          <MyAccessCard access={scope.organization.my_access} />
+          <MyAccessCard access={scope.organization.my_access} organizationName={scope.organization.name} />
         </>
       )}
     </OrganizationPage>
@@ -52,12 +46,12 @@ export function OrganizationDetailsPage() {
 
 export function OrganizationMembersPage() {
   return (
-    <OrganizationPage title="Members" description="People with a direct role in this organization.">
+    <OrganizationPage>
       {(scope, can) =>
-        can.canManageAccess ? (
-          <OrganizationMembersCard key={scope.orgId} scope={scope} />
+        can.canViewAccess ? (
+          <OrganizationMembersCard key={scope.orgId} scope={scope} canManage={can.canManageAccess} />
         ) : (
-          <NoPermission what="manage members" />
+          <NoPermission what="view members" />
         )
       }
     </OrganizationPage>
@@ -66,15 +60,12 @@ export function OrganizationMembersPage() {
 
 export function OrganizationAccessPage() {
   return (
-    <OrganizationPage
-      title="Access & permissions"
-      description="Who reaches this organization, how, and with which effective permissions."
-    >
+    <OrganizationPage>
       {(scope, can) =>
-        can.canManageAccess ? (
-          <EffectiveAccessCard key={scope.orgId} scope={scope} />
+        can.canViewAccess ? (
+          <EffectiveAccessCard key={scope.orgId} scope={scope} canManage={can.canManageAccess} />
         ) : (
-          <NoPermission what="manage access" />
+          <NoPermission what="view permissions" />
         )
       }
     </OrganizationPage>
@@ -83,14 +74,15 @@ export function OrganizationAccessPage() {
 
 export function OrganizationActivityPage() {
   return (
-    <OrganizationPage title="Activity" description="Changes made in this organization.">
+    <OrganizationPage>
       {(scope, can) =>
         can.canViewActivity ? (
           <ActivityCard
             key={scope.orgId}
+            owner={scope.organization.name}
             description="Membership, permission and infrastructure changes in this organization."
-            queryKey={(page) => queryKeys.organizationActivity(scope.tenantId, scope.orgId, page)}
-            fetchPage={(page, signal) => tenancyApi.organizationActivity(scope.tenantId, scope.orgId, page, signal)}
+            queryKey={(page, ordering) => queryKeys.organizationActivity(scope.tenantId, scope.orgId, page, ordering)}
+            fetchPage={(page, signal, ordering) => tenancyApi.organizationActivity(scope.tenantId, scope.orgId, page, signal, ordering)}
           />
         ) : (
           <NoPermission what="view the activity history" />

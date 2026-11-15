@@ -35,6 +35,7 @@ def test_empty_list_allows_any_domain(settings):
     assert is_allowed_email_domain("someone@company.example")
 
 
+@pytest.mark.django_db  # an organization invitation can allow an unknown domain
 def test_clean_email_rejects_unknown_domain():
     with pytest.raises(ValidationError):
         AccountAdapter().clean_email("someone@company.example")

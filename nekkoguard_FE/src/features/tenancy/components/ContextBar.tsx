@@ -1,147 +1,101 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Building2, Check, ChevronDown, Layers, MapPin, Network } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Building2, Check, ChevronDown, Search } from 'lucide-react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Skeleton } from '@/components/Skeleton/Skeleton';
 import { useTenancy } from '../hooks';
-import type { Level } from '../selection';
+import { groupOrganizations } from '../switcher';
 import styles from './ContextBar.module.css';
 
-interface Option {
-  id: string;
-  name: string;
-  hint?: string;
-}
+/**
+ * Organization switcher (the user always works inside one Organization).
+ *
+ * Lists every Organization the user can open, grouped by Tenant, with a search box on
+ * the first row. Picking an Organization of another Tenant switches the Tenant too.
+ */
+export function ContextBar() {
+  const { tenants, tenantsError, myOrganizations, myOrganizationsError, selection, selectOrganization } = useTenancy();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const search = useRef<HTMLInputElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
 
-interface SelectorProps {
-  level: Level;
-  label: string;
-  icon: ReactNode;
-  value: string | null;
-  options: Option[];
-  /** Offer an "All …" entry (optional filters only). */
-  allLabel?: string;
-  onSelect: (level: Level, id: string | null) => void;
-}
+  useEffect(() => {
+    if (!open) return;
+    // Radix focuses the menu itself when it opens; move focus to the search box after.
+    const timer = window.setTimeout(() => search.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [open]);
 
-function Selector({ level, label, icon, value, options, allLabel, onSelect }: SelectorProps) {
-  const current = options.find((option) => option.id === value);
-  const text = current?.name ?? allLabel ?? '—';
+  if (tenantsError || myOrganizationsError) return <span className={styles.muted}>Context unavailable</span>;
+  if (!tenants || !myOrganizations) return <Skeleton width={180} height={14} />;
+  if (tenants.length === 0) return <span className={styles.muted}>No tenant access yet</span>;
+  if (myOrganizations.length === 0) return <span className={styles.muted}>No organization access</span>;
+
+  const current = myOrganizations.find((o) => o.id === selection.org);
+  const groups = groupOrganizations(myOrganizations, query);
+  const firstMatch = groups[0]?.organizations[0];
+
+  const onSearchKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    } else if (event.key === 'Enter' && firstMatch) {
+      event.preventDefault();
+      selectOrganization(firstMatch.id);
+      setOpen(false);
+    }
+    // Keep typing in the box: the menu's own type-ahead would steal these keys.
+    if (event.key !== 'Escape' && event.key !== 'Tab') event.stopPropagation();
+  };
+
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger className={styles.trigger} aria-label={`${label}: ${text}`}>
+    <DropdownMenu.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery('');
+      }}
+    >
+      <DropdownMenu.Trigger
+        className={styles.trigger}
+        aria-label={`Organization: ${current?.name ?? 'none selected'}`}
+        title={current ? `${current.tenant_name} / ${current.name}` : undefined}
+      >
         <span className={styles.icon} aria-hidden="true">
-          {icon}
+          <Building2 size={14} />
         </span>
-        <span className={styles.value}>{text}</span>
+        <span className={styles.value}>{current?.name ?? 'Select an organization'}</span>
         <ChevronDown size={13} className={styles.chevron} aria-hidden="true" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className={styles.menu} align="start" sideOffset={6}>
-          <DropdownMenu.Label className={styles.menuLabel}>{label}</DropdownMenu.Label>
-          {allLabel && (
-            <DropdownMenu.Item className={styles.item} onSelect={() => onSelect(level, null)}>
-              <span className={styles.check}>{value === null && <Check size={14} />}</span>
-              {allLabel}
-            </DropdownMenu.Item>
-          )}
-          {options.map((option) => (
-            <DropdownMenu.Item key={option.id} className={styles.item} onSelect={() => onSelect(level, option.id)}>
-              <span className={styles.check}>{option.id === value && <Check size={14} />}</span>
-              <span className={styles.itemText}>
-                <span className={styles.itemName}>{option.name}</span>
-                {option.hint && <span className={styles.itemHint}>{option.hint}</span>}
-              </span>
-            </DropdownMenu.Item>
+        <DropdownMenu.Content ref={menu} className={styles.menu} align="center" sideOffset={6}>
+          <div className={styles.searchRow}>
+            <Search size={14} className={styles.searchIcon} aria-hidden="true" />
+            <input
+              ref={search}
+              type="search"
+              className={styles.search}
+              placeholder="Search organizations"
+              aria-label="Search organizations"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={onSearchKey}
+            />
+          </div>
+          {groups.length === 0 && <p className={styles.empty}>No organizations match “{query.trim()}”.</p>}
+          {groups.map((group) => (
+            <DropdownMenu.Group key={group.tenantId} className={styles.group}>
+              <DropdownMenu.Label className={styles.menuLabel}>{group.tenantName}</DropdownMenu.Label>
+              {group.organizations.map((org) => (
+                <DropdownMenu.Item key={org.id} className={styles.item} onSelect={() => selectOrganization(org.id)}>
+                  <span className={styles.check}>{org.id === selection.org && <Check size={14} />}</span>
+                  <span className={styles.itemName}>{org.name}</span>
+                </DropdownMenu.Item>
+              ))}
+            </DropdownMenu.Group>
           ))}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
-  );
-}
-
-function Separator() {
-  return (
-    <span className={styles.separator} aria-hidden="true">
-      /
-    </span>
-  );
-}
-
-/**
- * Tenant / Organization / Site / Network selectors. Only levels the user can access
- * are shown; options come from the backend's lists for this user.
- */
-export function ContextBar() {
-  const { tenants, tenantsError, organizations, sites, networks, selection, select } = useTenancy();
-
-  if (tenantsError) return <span className={styles.muted}>Context unavailable</span>;
-  if (!tenants) return <Skeleton width={180} height={14} />;
-  if (tenants.length === 0) return <span className={styles.muted}>No tenant access yet</span>;
-
-  const tenantOptions = tenants.map((t) => ({
-    id: t.id,
-    name: t.name,
-    hint: t.role ? undefined : 'Organization access only',
-  }));
-  const visibleNetworks = networks?.filter((n) => selection.site === null || n.site === selection.site);
-
-  return (
-    <nav className={styles.bar} aria-label="Current context">
-      <Selector
-        level="tenant"
-        label="Tenant"
-        icon={<Layers size={14} />}
-        value={selection.tenant}
-        options={tenantOptions}
-        onSelect={select}
-      />
-      {selection.tenant && (
-        <>
-          <Separator />
-          {organizations === undefined ? (
-            <Skeleton width={90} height={14} />
-          ) : organizations.length === 0 ? (
-            <span className={styles.muted}>No organization access</span>
-          ) : (
-            <Selector
-              level="org"
-              label="Organization"
-              icon={<Building2 size={14} />}
-              value={selection.org}
-              options={organizations.map((o) => ({ id: o.id, name: o.name }))}
-              onSelect={select}
-            />
-          )}
-        </>
-      )}
-      {selection.org && sites && sites.length > 0 && (
-        <span className={styles.optionalGroup}>
-          <Separator />
-          <Selector
-            level="site"
-            label="Site"
-            icon={<MapPin size={14} />}
-            value={selection.site}
-            options={sites.map((s) => ({ id: s.id, name: s.name }))}
-            allLabel="All sites"
-            onSelect={select}
-          />
-        </span>
-      )}
-      {selection.org && visibleNetworks && visibleNetworks.length > 0 && (
-        <span className={styles.optionalGroup}>
-          <Separator />
-          <Selector
-            level="network"
-            label="Network"
-            icon={<Network size={14} />}
-            value={selection.network}
-            options={visibleNetworks.map((n) => ({ id: n.id, name: n.name, hint: n.cidr || undefined }))}
-            allLabel="All networks"
-            onSelect={select}
-          />
-        </span>
-      )}
-    </nav>
   );
 }

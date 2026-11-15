@@ -183,6 +183,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    # Superuser "view as user" (read-only): after authentication. See users/impersonation.py.
+    "nekkoguard.users.impersonation.ImpersonationMiddleware",
 ]
 
 # STATIC
@@ -279,6 +281,11 @@ EMAIL_TIMEOUT = 5
 # Production overrides this with "/" (frontend and backend share one domain).
 FRONTEND_URL = env("DJANGO_FRONTEND_URL", default="")
 FRONTEND_PORT = env.int("DJANGO_FRONTEND_PORT", default=8080)
+
+# ORGANIZATION INVITATIONS
+# ------------------------------------------------------------------------------
+# How long an emailed invitation link stays valid (resending starts a new period).
+ORGANIZATION_INVITATION_TTL_DAYS = env.int("DJANGO_INVITATION_TTL_DAYS", default=7)
 
 # ADMIN
 # ------------------------------------------------------------------------------
@@ -498,6 +505,13 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Only views that opt in (ScopedRateThrottle) are throttled.
+    "DEFAULT_THROTTLE_RATES": {
+        # Adding members / sending invitation emails, per administrator.
+        "member_invitations": "60/hour",
+        # Opening / accepting invitation links, per user or client address.
+        "invitation_links": "60/hour",
+    },
 }
 
 # django-cors-headers - https://github.com/adamchainz/django-cors-headers#setup

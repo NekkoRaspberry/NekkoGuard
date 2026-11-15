@@ -13,7 +13,8 @@ Tenant / Organization APIs. Isolation rules: see ``permissions.py`` and ``access
     /api/tenants/{t}/organizations/{o}/sites/         sites
     /api/tenants/{t}/organizations/{o}/networks/      networks (?site=)
     /api/tenants/{t}/organizations/{o}/activity/      organization audit trail
-    /api/platform/tenants/                            platform admins (is_staff)
+
+Tenants are created and deactivated in Django admin only (no platform API).
 """
 
 from __future__ import annotations
@@ -24,45 +25,60 @@ from typing import Any
 from typing import ClassVar
 
 from django.db.models import Count
-from django.db.models import Prefetch
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter
 from drf_spectacular.utils import extend_schema
 from drf_spectacular.utils import extend_schema_view
 from rest_framework import mixins
 from rest_framework import status
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.exceptions import ValidationError
+from rest_framework.filters import OrderingFilter
 from rest_framework.filters import SearchFilter
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.views import APIView
 
 from nekkoguard.organizations import access
+from nekkoguard.organizations import invitations
 from nekkoguard.organizations import services
+from nekkoguard.organizations.context import default_tenant_id
+from nekkoguard.organizations.models import InvitationStatus
 from nekkoguard.organizations.models import MembershipStatus
 from nekkoguard.organizations.models import Network
 from nekkoguard.organizations.models import Organization
+from nekkoguard.organizations.models import OrganizationInvitation
 from nekkoguard.organizations.models import OrganizationMembership
 from nekkoguard.organizations.models import PermissionOverride
 from nekkoguard.organizations.models import Site
 from nekkoguard.organizations.models import Tenant
 from nekkoguard.organizations.models import TenantMembership
+from nekkoguard.organizations.roles import OrganizationAccess
 from nekkoguard.organizations.roles import Permission
 from nekkoguard.organizations.roles import TenantPermission
+from nekkoguard.users.frontend import frontend_url
 
-from .permissions import PLATFORM_PERMISSIONS
 from .permissions import SCOPED_PERMISSIONS
+from .permissions import TENANT_ADMINISTRATION
 from .permissions import UUID_REGEX
 from .permissions import OrganizationScopedMixin
 from .permissions import Requirement
 from .permissions import TenantScopedMixin
 from .serializers import ActivityEntrySerializer
+from .serializers import AddMemberResultSerializer
 from .serializers import EffectiveAccessSerializer
+from .serializers import MyOrganizationSerializer
 from .serializers import NetworkSerializer
 from .serializers import OrganizationDetailSerializer
+from .serializers import OrganizationInvitationSerializer
 from .serializers import OrganizationMembershipCreateSerializer
 from .serializers import OrganizationMembershipSerializer
 from .serializers import OrganizationMembershipUpdateSerializer
@@ -70,7 +86,6 @@ from .serializers import OrganizationSerializer
 from .serializers import PermissionOverrideSerializer
 from .serializers import PermissionOverrideUpdateSerializer
 from .serializers import PermissionOverrideWriteSerializer
-from .serializers import PlatformTenantSerializer
 from .serializers import SiteSerializer
 from .serializers import TenantMembershipCreateSerializer
 from .serializers import TenantMembershipSerializer
@@ -91,6 +106,13 @@ MANAGE_ACCESS: Requirement = (
     TenantPermission.MANAGE_MEMBERS,
 )
 
+# Reading who reaches an Organization (members, invitations, permissions): every
+# role holds members.view; Tenant member managers too. Changes need MANAGE_ACCESS.
+VIEW_ACCESS: Requirement = (
+    Permission.VIEW_MEMBERS,
+    *MANAGE_ACCESS,
+)
+
 
 def _schema(*params: OpenApiParameter, **actions: Any) -> Any:
     """Document the URL parameters on every action the view actually has."""
@@ -109,6 +131,28 @@ def _schema(*params: OpenApiParameter, **actions: Any) -> Any:
 
 class ActivityPagination(PageNumberPagination):
     page_size = 50
+
+
+class ActivityOrdering(OrderingFilter):
+    """
+    ``?ordering=<field>`` or ``-<field>`` over an explicit allowlist (DRF drops any
+    other field). The id is always the last key, so pages stay stable when several
+    entries share a value. Scoping is untouched: it happens in ``get_queryset``.
+    """
+
+    def get_ordering(self, request, queryset, view):
+        ordering = list(super().get_ordering(request, queryset, view) or [])
+        if not any(f.lstrip("-") == "id" for f in ordering):
+            descending = bool(ordering) and ordering[0].startswith("-")
+            ordering.append("-id" if descending or not ordering else "id")
+        return ordering
+
+
+ACTIVITY_ORDERING = {
+    "filter_backends": [ActivityOrdering],
+    "ordering_fields": ["created_at", "actor_email", "action", "target_name"],
+    "ordering": ["-created_at"],
+}
 
 
 # ---------------------------------------------------------------- tenants
@@ -140,6 +184,11 @@ class TenantViewSet(
                     status=MembershipStatus.ACTIVE,
                 )
             }
+            if self.action == "list":
+                context["default_tenant_id"] = default_tenant_id(
+                    self.request.user,
+                    self.get_queryset(),
+                )
         return context
 
     def update(self, request: Request, *args, **kwargs) -> Response:
@@ -154,6 +203,24 @@ class TenantViewSet(
             actor=self.request.user,
             tenant=serializer.instance,
             **serializer.validated_data,
+        )
+
+
+class MyOrganizationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """
+    Every Organization the caller can open, across all their Tenants, grouped by
+    Tenant name (the organization switcher). Same rule as ``get_organization_access``.
+    """
+
+    serializer_class = MyOrganizationSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_queryset(self) -> QuerySet[Organization]:
+        return (
+            access.accessible_organizations(self.request.user)
+            .select_related("tenant")
+            .order_by("tenant__name", "name")
         )
 
 
@@ -193,11 +260,31 @@ class TenantMemberViewSet(
     def get_queryset(self) -> QuerySet[TenantMembership]:
         if getattr(self, "swagger_fake_view", False):  # schema generation only
             return TenantMembership.objects.none()
-        return (
-            TenantMembership.objects.filter(tenant=self.tenant)
-            .select_related("user")
-            .prefetch_related("organization_grants")
-        )
+        members = TenantMembership.objects.filter(tenant=self.tenant)
+        actor = self.tenant_access
+        if actor is not None and not actor.full_scope:
+            # A scoped administrator sees the members that concern their
+            # organizations (and those with no organization access yet).
+            scope = actor.administered_organizations()
+            concerns = (
+                Q(pk=actor.membership.pk)
+                | Q(organization_access=OrganizationAccess.NONE)
+                | Q(
+                    organization_access=OrganizationAccess.SELECTED,
+                    organization_grants__isnull=True,
+                )
+                | Q(organization_grants__organization__in=scope.values("pk"))
+            )
+            if scope.exists():
+                # "All organizations" includes theirs (shown, not manageable).
+                concerns |= Q(organization_access=OrganizationAccess.ALL)
+            members = members.filter(concerns).distinct()
+        return members.select_related("user").prefetch_related("organization_grants")
+
+    def get_serializer_context(self) -> dict:
+        context = super().get_serializer_context()
+        context["tenant_actor"] = self.tenant_access
+        return context
 
     def create(self, request: Request, *args, **kwargs) -> Response:
         serializer = TenantMembershipCreateSerializer(
@@ -212,7 +299,10 @@ class TenantMemberViewSet(
             **data,
         )
         return Response(
-            TenantMembershipSerializer(membership).data,
+            TenantMembershipSerializer(
+                membership,
+                context=self.get_serializer_context(),
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -227,7 +317,12 @@ class TenantMemberViewSet(
             target=self.get_object(),
             **serializer.validated_data,
         )
-        return Response(TenantMembershipSerializer(membership).data)
+        return Response(
+            TenantMembershipSerializer(
+                membership,
+                context=self.get_serializer_context(),
+            ).data,
+        )
 
     def perform_destroy(self, instance: TenantMembership) -> None:
         services.remove_tenant_member(
@@ -248,8 +343,18 @@ class TenantActivityViewSet(
         "list": (TenantPermission.VIEW_ACTIVITY,),
     }
     pagination_class = ActivityPagination
+    filter_backends = ACTIVITY_ORDERING["filter_backends"]
+    ordering_fields = ACTIVITY_ORDERING["ordering_fields"]
+    ordering = ACTIVITY_ORDERING["ordering"]
 
     def get_queryset(self):
+        actor = self.tenant_access
+        if actor is not None and not actor.full_scope:
+            # Scoped administrators: activity of their organizations only (tenant-wide
+            # entries can concern organizations outside their scope).
+            return self.tenant.activity.filter(
+                organization__in=actor.administered_organizations(),
+            )
         return self.tenant.activity.all()
 
 
@@ -264,9 +369,9 @@ class TenantOrganizationViewSet(
     viewsets.GenericViewSet,
 ):
     """
-    Organizations of one Tenant. Tenant organization managers see all of them
-    (with ``has_access`` telling whether they also reach the infrastructure);
-    everyone else sees only the Organizations they reach.
+    Organizations of one Tenant: those the caller reaches, plus — for Tenant
+    organization managers — those in their organization scope (``can_administer``;
+    ``has_access`` tells whether they also reach the infrastructure).
     """
 
     serializer_class = OrganizationSerializer
@@ -297,14 +402,23 @@ class TenantOrganizationViewSet(
     def satisfies(self, requirement: Requirement) -> bool:
         return requirement == () or super().satisfies(requirement)
 
+    def _administered(self) -> QuerySet[Organization]:
+        if not self._is_manager():
+            return Organization.objects.none()
+        return self.tenant_access.administered_organizations()  # type: ignore[union-attr]
+
     def get_queryset(self) -> QuerySet[Organization]:
-        if self._is_manager():
-            return self.tenant.organizations.all()
-        return self._accessible()
+        return self.tenant.organizations.filter(
+            Q(pk__in=self._administered().values("pk"))
+            | Q(pk__in=self._accessible().values("pk")),
+        )
 
     def get_serializer_context(self) -> dict:
         context = super().get_serializer_context()
         context["accessible_ids"] = set(self._accessible().values_list("pk", flat=True))
+        context["administered_ids"] = set(
+            self._administered().values_list("pk", flat=True),
+        )
         return context
 
     def perform_create(self, serializer: BaseSerializer) -> None:
@@ -348,6 +462,10 @@ class OrganizationDetailViewSet(
     def get_serializer_context(self) -> dict:
         context = super().get_serializer_context()
         context["organization_context"] = self.organization_context
+        # Tenant rights here (only inside the caller's organization scope).
+        context["can_administer"] = self.tenant_access is not None and any(
+            self.tenant_access.can(p) for p in TENANT_ADMINISTRATION
+        )
         return context
 
     def perform_update(self, serializer: BaseSerializer) -> None:
@@ -386,10 +504,11 @@ class OrganizationMemberViewSet(
     """Direct Organization memberships. Role rules live in services.py."""
 
     serializer_class = OrganizationMembershipSerializer
-    required_permissions: ClassVar[dict[str, Requirement]] = dict.fromkeys(
-        ["list", "retrieve", "create", "partial_update", "destroy"],
-        MANAGE_ACCESS,
-    )
+    required_permissions: ClassVar[dict[str, Requirement]] = {
+        "list": VIEW_ACCESS,
+        "retrieve": VIEW_ACCESS,
+        **dict.fromkeys(["create", "partial_update", "destroy"], MANAGE_ACCESS),
+    }
     lookup_value_regex = "[0-9]+"
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     filter_backends = [SearchFilter]
@@ -402,18 +521,28 @@ class OrganizationMemberViewSet(
             organization=self.organization,
         ).select_related("user", "organization__tenant")
 
+    def get_throttles(self):
+        if self.action == "create":
+            self.throttle_scope = "member_invitations"
+            return [ScopedRateThrottle()]
+        return super().get_throttles()
+
+    @extend_schema(
+        request=OrganizationMembershipCreateSerializer,
+        responses={201: AddMemberResultSerializer},
+    )
     def create(self, request: Request, *args, **kwargs) -> Response:
+        """Add by email: existing account → member (Viewer); otherwise → invitation."""
         serializer = OrganizationMembershipCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        membership = services.add_organization_member(
+        result, obj = invitations.add_or_invite(
             actor=self.actor,
-            user=serializer.validated_data["email"],
-            role=serializer.validated_data["role"],
+            email=serializer.validated_data["email"],
+            link_for=lambda token: invitation_link(request, token),
         )
-        return Response(
-            OrganizationMembershipSerializer(membership).data,
-            status=status.HTTP_201_CREATED,
-        )
+        key = "membership" if result == "added" else "invitation"
+        data = AddMemberResultSerializer({"result": result, key: obj}).data
+        return Response(data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request: Request, *args, **kwargs) -> Response:
         serializer = OrganizationMembershipUpdateSerializer(data=request.data)
@@ -427,6 +556,124 @@ class OrganizationMemberViewSet(
 
     def perform_destroy(self, instance: OrganizationMembership) -> None:
         services.remove_organization_member(actor=self.actor, target=instance)
+
+
+def invitation_link(request: Request, token: str) -> str:
+    """Frontend page of an invitation (the only place the plain token appears)."""
+    return frontend_url(request, f"invitations/{token}")
+
+
+@_schema(TENANT_PARAM, ORG_PARAM)
+class OrganizationInvitationViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
+    _OrganizationViewSet,
+):
+    """
+    Invitations of this Organization. DELETE revokes (the row is kept for the
+    record); ``resend/`` rotates the token and restarts the expiry period.
+    """
+
+    serializer_class = OrganizationInvitationSerializer
+    required_permissions: ClassVar[dict[str, Requirement]] = {
+        "list": VIEW_ACCESS,
+        "retrieve": VIEW_ACCESS,
+        **dict.fromkeys(["destroy", "resend"], MANAGE_ACCESS),
+    }
+    lookup_value_regex = UUID_REGEX
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[OrganizationInvitation]:
+        if getattr(self, "swagger_fake_view", False):  # schema generation only
+            return OrganizationInvitation.objects.none()
+        # Accepted and revoked invitations are history (see Activity).
+        return OrganizationInvitation.objects.filter(
+            organization=self.organization,
+            status__in=[InvitationStatus.PENDING, InvitationStatus.EXPIRED],
+        ).select_related("invited_by")
+
+    def get_throttles(self):
+        if self.action == "resend":
+            self.throttle_scope = "member_invitations"
+            return [ScopedRateThrottle()]
+        return super().get_throttles()
+
+    def perform_destroy(self, instance: OrganizationInvitation) -> None:
+        invitations.revoke_invitation(actor=self.actor, invitation=instance)
+
+    @extend_schema(
+        parameters=[TENANT_PARAM, ORG_PARAM],
+        request=None,
+        responses=OrganizationInvitationSerializer,
+    )
+    @action(detail=True, methods=["post"])
+    def resend(self, request: Request, *args, **kwargs) -> Response:
+        invitation = invitations.resend_invitation(
+            actor=self.actor,
+            invitation=self.get_object(),
+            link_for=lambda token: invitation_link(request, token),
+        )
+        return Response(OrganizationInvitationSerializer(invitation).data)
+
+
+class InvitationLinkView(APIView):
+    """
+    GET /api/invitations/{token}/ — public: what the emailed link is about. Only a
+    pending invitation reveals its Organization and inviter; any other state
+    answers with its status only. Unknown tokens: 404.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "invitation_links"
+
+    @extend_schema(responses=OpenApiTypes.OBJECT)
+    def get(self, request: Request, token: str) -> Response:
+        invitation = invitations.find_by_token(token)
+        if invitation is None:
+            raise NotFound(_("This invitation does not exist."))
+        state = invitations.effective_status(invitation)
+        organization = invitation.organization
+        if state != InvitationStatus.PENDING or not (
+            organization.is_active and organization.tenant.is_active
+        ):
+            unavailable = state == InvitationStatus.PENDING
+            return Response({"status": "unavailable" if unavailable else state})
+        return Response(
+            {
+                "status": state,
+                "email": invitation.email,
+                "organization_name": organization.name,
+                "invited_by": invitations._display_name(invitation.invited_by),  # noqa: SLF001
+                "role": invitation.role,
+                "expires_at": invitation.expires_at,
+            },
+        )
+
+
+class InvitationAcceptView(APIView):
+    """POST /api/invitations/{token}/accept/ — by the owner of the invited address."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "invitation_links"
+
+    @extend_schema(request=None, responses=OpenApiTypes.OBJECT)
+    def post(self, request: Request, token: str) -> Response:
+        invitation, already_member = invitations.accept_invitation(
+            token=token,
+            user=request.user,  # type: ignore[arg-type]
+        )
+        organization = invitation.organization
+        return Response(
+            {
+                "tenant": str(organization.tenant_id),
+                "organization": str(organization.pk),
+                "organization_name": organization.name,
+                "already_member": already_member,
+            },
+        )
 
 
 @_schema(
@@ -452,10 +699,11 @@ class PermissionOverrideViewSet(
     """Explicit GRANT/DENY per user. POST upserts; DELETE returns to INHERIT."""
 
     serializer_class = PermissionOverrideSerializer
-    required_permissions: ClassVar[dict[str, Requirement]] = dict.fromkeys(
-        ["list", "retrieve", "create", "partial_update", "destroy"],
-        MANAGE_ACCESS,
-    )
+    required_permissions: ClassVar[dict[str, Requirement]] = {
+        "list": VIEW_ACCESS,
+        "retrieve": VIEW_ACCESS,
+        **dict.fromkeys(["create", "partial_update", "destroy"], MANAGE_ACCESS),
+    }
     lookup_value_regex = "[0-9]+"
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
@@ -499,7 +747,7 @@ class OrganizationAccessViewSet(mixins.ListModelMixin, _OrganizationViewSet):
     """Everyone who reaches the Organization, with the source of each permission."""
 
     serializer_class = EffectiveAccessSerializer
-    required_permissions: ClassVar[dict[str, Requirement]] = {"list": MANAGE_ACCESS}
+    required_permissions: ClassVar[dict[str, Requirement]] = {"list": VIEW_ACCESS}
 
     def list(self, request: Request, *args, **kwargs) -> Response:
         contexts = access.organization_access_list(self.organization)
@@ -619,64 +867,9 @@ class OrganizationActivityViewSet(mixins.ListModelMixin, _OrganizationViewSet):
         "list": (Permission.VIEW_ACTIVITY, TenantPermission.VIEW_ACTIVITY),
     }
     pagination_class = ActivityPagination
+    filter_backends = ACTIVITY_ORDERING["filter_backends"]
+    ordering_fields = ACTIVITY_ORDERING["ordering_fields"]
+    ordering = ACTIVITY_ORDERING["ordering"]
 
     def get_queryset(self):
         return self.organization.activity.all()
-
-
-# ---------------------------------------------------------------- platform
-
-
-class PlatformTenantViewSet(
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    mixins.UpdateModelMixin,
-    viewsets.GenericViewSet,
-):
-    """Platform administrators manage Tenants (not their infrastructure data)."""
-
-    serializer_class = PlatformTenantSerializer
-    permission_classes = PLATFORM_PERMISSIONS
-    http_method_names = ["get", "post", "patch", "head", "options"]
-    filter_backends = [SearchFilter]
-    search_fields = ["name"]
-    lookup_value_regex = UUID_REGEX
-
-    def get_queryset(self) -> QuerySet[Tenant]:
-        return (
-            Tenant.objects.annotate(
-                member_count=Count("memberships", distinct=True),
-                organization_count=Count("organizations", distinct=True),
-            )
-            .prefetch_related(
-                Prefetch(
-                    "memberships",
-                    queryset=TenantMembership.objects.select_related("user"),
-                ),
-            )
-            .order_by("name")
-        )
-
-    def perform_create(self, serializer: BaseSerializer) -> None:
-        data = serializer.validated_data
-        serializer.instance = services.create_tenant(
-            name=data["name"],
-            description=data.get("description", ""),
-            owner=data["owner"],
-            created_by=self.request.user,
-        )
-
-    def create(self, request: Request, *args, **kwargs) -> Response:
-        response = super().create(request, *args, **kwargs)
-        # Re-read with the annotations (member count, owners).
-        instance = self.get_queryset().get(pk=response.data["id"])
-        response.data = self.get_serializer(instance).data
-        return response
-
-    def perform_update(self, serializer: BaseSerializer) -> None:
-        serializer.instance = services.update_tenant(
-            actor=self.request.user,
-            tenant=serializer.instance,
-            **serializer.validated_data,
-        )

@@ -24,3 +24,18 @@
 .suffix {
   color: var(--primary-hover);
 }
+
+/* White-label branding (only rendered when an appearance is configured). */
+.image {
+  flex-shrink: 0;
+  width: auto;
+  object-fit: contain;
+}
+
+.customTitle {
+  display: inline-block;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}

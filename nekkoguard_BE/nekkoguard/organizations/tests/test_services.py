@@ -1,4 +1,4 @@
-"""Write rules: privilege-escalation prevention, owner invariant, tenant isolation."""
+"""Write rules: escalation prevention, last-admin invariant, tenant isolation."""
 
 from __future__ import annotations
 
@@ -20,6 +20,8 @@ from nekkoguard.organizations.roles import TenantRole
 from nekkoguard.users.tests.factories import UserFactory
 
 from .factories import OrganizationFactory
+from .factories import TenantFactory
+from .factories import TenantMembershipFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -94,21 +96,21 @@ class TestTenantMembers:
                 role=TenantRole.MEMBER,
             )
 
-    def test_admin_cannot_create_owner(self, world):
-        with pytest.raises(PermissionDenied):
-            services.add_tenant_member(
-                actor=tenant_actor(world, "john"),
-                user=UserFactory(),
-                role=TenantRole.OWNER,
-            )
+    def test_admin_may_create_admin(self, world):
+        created = services.add_tenant_member(
+            actor=tenant_actor(world, "john"),
+            user=UserFactory(),
+            role=TenantRole.ADMIN,
+        )
+        assert created.role == TenantRole.ADMIN
 
-    def test_admin_cannot_change_owner(self, world):
-        with pytest.raises(PermissionDenied):
-            services.update_tenant_member(
-                actor=tenant_actor(world, "john"),
-                target=membership(world, "owner"),
-                organization_access=Access.NONE,
-            )
+    def test_admin_may_change_another_admin(self, world):
+        services.update_tenant_member(
+            actor=tenant_actor(world, "john"),
+            target=membership(world, "ada"),
+            organization_access=Access.NONE,
+        )
+        assert membership(world, "ada").organization_access == Access.NONE
 
     def test_admin_cannot_change_own_membership(self, world):
         with pytest.raises(PermissionDenied):
@@ -119,21 +121,19 @@ class TestTenantMembers:
                 default_organization_role=OrgRole.ADMIN,
             )
 
-    def test_owner_may_change_own_access_but_not_own_role(self, world):
-        actor = tenant_actor(world, "owner")
-        services.update_tenant_member(
-            actor=actor,
-            target=membership(world, "owner"),
-            organization_access=Access.SELECTED,
-            selected_organizations=[world.a1],
-        )
-        assert access.get_organization_access(world.users["owner"], world.a2) is None
+    def test_admin_cannot_change_even_own_organization_access(self, world):
+        # Only owners could, and there are no owners any more (superusers fix it).
         with pytest.raises(PermissionDenied):
             services.update_tenant_member(
-                actor=actor,
-                target=membership(world, "owner"),
-                role=TenantRole.MEMBER,
+                actor=tenant_actor(world, "ada"),
+                target=membership(world, "ada"),
+                organization_access=Access.SELECTED,
+                selected_organizations=[world.a1],
             )
+        assert not services.may_manage_tenant_member(
+            tenant_actor(world, "ada"),
+            membership(world, "ada"),
+        )
 
     def test_policy_change_takes_effect_and_is_audited(self, world):
         services.update_tenant_member(
@@ -155,34 +155,72 @@ class TestTenantMembers:
         )
         assert not membership(world, "mary").organization_grants.exists()
 
-    def test_owner_may_suspend_another_owner(self, world):
+    def test_admin_may_suspend_another_admin(self, world):
         second_owner = UserFactory()
         services.add_tenant_member(
-            actor=tenant_actor(world, "owner"),
+            actor=tenant_actor(world, "ada"),
             user=second_owner,
-            role=TenantRole.OWNER,
+            role=TenantRole.ADMIN,
+            organization_access=Access.ALL,
+            default_organization_role=OrgRole.ADMIN,
         )
         services.update_tenant_member(
             actor=access.get_tenant_access(second_owner, world.tenant_a),
-            target=membership(world, "owner"),
+            target=membership(world, "ada"),
             status=MembershipStatus.SUSPENDED,
         )
-        assert tenant_actor(world, "owner") is None
+        assert tenant_actor(world, "ada") is None
 
-    def test_last_active_owner_is_protected(self, world):
-        # Defense in depth: the API paths cannot reach this state (actors that may
-        # touch owners are active owners themselves), so test the guard directly.
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"role": TenantRole.MEMBER},
+            {"status": MembershipStatus.SUSPENDED},
+            None,  # removal
+        ],
+    )
+    def test_last_active_admin_cannot_be_demoted_suspended_or_removed(self, change):
+        tenant = TenantFactory()
+        last_admin = TenantMembershipFactory(
+            tenant=tenant,
+            role=TenantRole.ADMIN,
+            organization_access=Access.NONE,
+        )
+        # Only a superuser can reach this: admins never change their own membership.
+        superuser = access.get_tenant_access(UserFactory(is_superuser=True), tenant)
+        if change is None:
+            with pytest.raises(ValidationError):
+                services.remove_tenant_member(actor=superuser, target=last_admin)
+        else:
+            with pytest.raises(ValidationError):
+                services.update_tenant_member(
+                    actor=superuser,
+                    target=last_admin,
+                    **change,
+                )
+        last_admin.refresh_from_db()
+        assert last_admin.role == TenantRole.ADMIN
+        assert last_admin.is_active
+
+    def test_an_admin_can_be_demoted_while_another_remains(self, world):
+        services.update_tenant_member(
+            actor=tenant_actor(world, "john"),
+            target=membership(world, "ada"),
+            role=TenantRole.MEMBER,
+        )
+        assert membership(world, "ada").role == TenantRole.MEMBER
+        # john is now the last active administrator of Tenant A.
         with pytest.raises(ValidationError):
-            services._ensure_owner_remains(  # noqa: SLF001
-                membership(world, "owner"),
-                stays_owner=False,
+            services._ensure_admin_remains(  # noqa: SLF001
+                membership(world, "john"),
+                stays_admin=False,
             )
 
     def test_tenant_actor_from_other_tenant_cannot_touch_members(self, world):
         # Services always work in the actor's own tenant.
         new = UserFactory()
         created = services.add_tenant_member(
-            actor=tenant_actor(world, "b_owner", "tenant_b"),
+            actor=tenant_actor(world, "b_admin", "tenant_b"),
             user=new,
             role=TenantRole.MEMBER,
         )
@@ -193,14 +231,17 @@ class TestTenantMembers:
 
 
 class TestOrganizations:
-    def test_creating_an_organization_grants_no_access(self, world):
+    def test_creating_an_organization_grants_nobody_else_access(self, world):
         organization = services.create_organization(
             actor=tenant_actor(world, "john"),
             name="New Org",
             description="",
         )
         assert organization.tenant == world.tenant_a
-        assert access.get_organization_access(world.users["john"], organization) is None
+        assert (
+            access.get_organization_access(world.users["peter"], organization) is None
+        )
+        assert access.get_organization_access(world.users["mary"], organization) is None
         assert ActivityEntry.objects.filter(
             action="organization.created",
             organization=organization,
@@ -233,7 +274,7 @@ class TestOrganizationMembers:
             services.add_organization_member(
                 actor=org_actor(world, "john", "a1"),
                 user=world.users["john"],
-                role=OrgRole.OWNER,
+                role=OrgRole.ADMIN,
             )
 
     def test_viewer_cannot_manage_members(self, world):
@@ -244,7 +285,7 @@ class TestOrganizationMembers:
                 role=OrgRole.VIEWER,
             )
 
-    def test_organization_admin_cannot_assign_owner(self, world):
+    def test_organization_admin_may_assign_admin(self, world):
         org_admin = UserFactory()
         OrganizationMembership.objects.create(
             organization=world.a2,
@@ -257,24 +298,19 @@ class TestOrganizationMembers:
             tenant_access=None,
             context=access.get_organization_access(org_admin, world.a2),
         )
-        with pytest.raises(PermissionDenied):
-            services.add_organization_member(
-                actor=actor,
-                user=UserFactory(),
-                role=OrgRole.OWNER,
-            )
-        services.add_organization_member(
+        created = services.add_organization_member(
             actor=actor,
             user=UserFactory(),
             role=OrgRole.ADMIN,
         )
+        assert created.role == OrgRole.ADMIN
 
     def test_organization_manager_cannot_touch_tenant_administrators(self, world):
         org_owner = UserFactory()
         OrganizationMembership.objects.create(
             organization=world.a1,
             user=org_owner,
-            role=OrgRole.OWNER,
+            role=OrgRole.ADMIN,
         )
         actor = services.OrganizationActor(
             user=org_owner,
@@ -285,24 +321,28 @@ class TestOrganizationMembers:
         with pytest.raises(PermissionDenied):
             services.set_permission_override(
                 actor=actor,
-                user=world.users["owner"],
+                user=world.users["ada"],
                 permission=Permission.VIEW_SITES,
                 effect=Effect.DENY,
             )
 
-    def test_tenant_admin_cannot_change_tenant_owner_access(self, world):
-        with pytest.raises(PermissionDenied):
-            services.set_permission_override(
-                actor=org_actor(world, "john", "a1"),
-                user=world.users["owner"],
-                permission=Permission.VIEW_SITES,
-                effect=Effect.DENY,
-            )
+    def test_tenant_admin_may_change_another_tenant_admins_access(self, world):
+        services.set_permission_override(
+            actor=org_actor(world, "john", "a1"),
+            user=world.users["ada"],
+            permission=Permission.VIEW_SITES,
+            effect=Effect.DENY,
+        )
+        assert not access.resolve_permission(
+            world.users["ada"],
+            world.a1,
+            Permission.VIEW_SITES,
+        )
 
 
 class TestOverrides:
     def test_override_upsert_and_removal_back_to_inherit(self, world):
-        actor = org_actor(world, "owner", "a1")
+        actor = org_actor(world, "ada", "a1")
         carl = world.users["carl"]
         override = services.set_permission_override(
             actor=actor,
@@ -333,7 +373,7 @@ class TestOverrides:
         )
         # Strip the admin's own manage permission via a tenant manager…
         services.set_permission_override(
-            actor=org_actor(world, "owner", "a2"),
+            actor=org_actor(world, "ada", "a2"),
             user=org_admin,
             permission=Permission.MANAGE_SITES,
             effect=Effect.DENY,
@@ -363,7 +403,7 @@ class TestOverrides:
     def test_override_target_must_belong_to_tenant_or_organization(self, world):
         with pytest.raises(ValidationError):
             services.set_permission_override(
-                actor=org_actor(world, "owner", "a1"),
+                actor=org_actor(world, "ada", "a1"),
                 user=world.users["outsider"],
                 permission=Permission.VIEW_SITES,
                 effect=Effect.GRANT,
@@ -372,8 +412,8 @@ class TestOverrides:
     def test_override_for_tenant_b_user_is_rejected_in_tenant_a(self, world):
         with pytest.raises(ValidationError):
             services.set_permission_override(
-                actor=org_actor(world, "owner", "a1"),
-                user=world.users["b_owner"],
+                actor=org_actor(world, "ada", "a1"),
+                user=world.users["b_admin"],
                 permission=Permission.VIEW_SITES,
                 effect=Effect.GRANT,
             )

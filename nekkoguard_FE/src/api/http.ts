@@ -35,7 +35,8 @@ export async function httpRequest(
     'Accept-Language': 'en',
     ...extraHeaders,
   };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const isForm = body instanceof FormData; // multipart: the browser sets the boundary header
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   if (isUnsafeMethod(method)) {
     const csrf = getCsrfToken();
     if (csrf) headers['X-CSRFToken'] = csrf;
@@ -47,7 +48,7 @@ export async function httpRequest(
     response = await fetch(`${config.apiBaseUrl}${path}`, {
       method,
       headers,
-      body: body === undefined ? null : JSON.stringify(body),
+      body: body === undefined ? null : isForm ? body : JSON.stringify(body),
       credentials: 'same-origin',
       signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
     });

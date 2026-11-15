@@ -1,7 +1,9 @@
 from django.conf import settings
+from django.urls import re_path
 from rest_framework.routers import DefaultRouter
 from rest_framework.routers import SimpleRouter
 
+from nekkoguard.organizations.api import appearance
 from nekkoguard.organizations.api import views as organizations
 from nekkoguard.organizations.api.permissions import UUID_REGEX
 from nekkoguard.users.api.views import UserViewSet
@@ -16,6 +18,11 @@ TENANT = rf"tenants/(?P<tenant_pk>{UUID_REGEX})"
 ORG = rf"{TENANT}/organizations/(?P<organization_pk>{UUID_REGEX})"
 
 router.register("tenants", organizations.TenantViewSet, basename="tenant")
+router.register(
+    "organizations",
+    organizations.MyOrganizationViewSet,
+    basename="my-organization",
+)
 router.register(
     f"{TENANT}/members",
     organizations.TenantMemberViewSet,
@@ -42,6 +49,11 @@ router.register(
     basename="organization-member",
 )
 router.register(
+    f"{ORG}/invitations",
+    organizations.OrganizationInvitationViewSet,
+    basename="organization-invitation",
+)
+router.register(
     f"{ORG}/overrides",
     organizations.PermissionOverrideViewSet,
     basename="permission-override",
@@ -58,12 +70,47 @@ router.register(
     organizations.OrganizationActivityViewSet,
     basename="organization-activity",
 )
-router.register(
-    "platform/tenants",
-    organizations.PlatformTenantViewSet,
-    basename="platform-tenant",
-)
 
+
+# Invitation links (the token is the only secret; it is never stored in plain text).
+INVITATION_KEY = r"(?P<token>[A-Za-z0-9_-]{20,128})"
+invitation_urls = [
+    re_path(
+        rf"^invitations/{INVITATION_KEY}/$",
+        organizations.InvitationLinkView.as_view(),
+        name="invitation-link",
+    ),
+    re_path(
+        rf"^invitations/{INVITATION_KEY}/accept/$",
+        organizations.InvitationAcceptView.as_view(),
+        name="invitation-accept",
+    ),
+]
+
+# White-label appearance (branding only — never infrastructure access).
+ASSET = r"(?P<asset>logo|favicon)"
+appearance_urls = [
+    re_path(
+        rf"^{TENANT}/appearance/$",
+        appearance.TenantAppearanceView.as_view(),
+        name="tenant-appearance",
+    ),
+    re_path(
+        rf"^{TENANT}/appearance/{ASSET}/$",
+        appearance.TenantAppearanceAssetView.as_view(),
+        name="tenant-appearance-asset",
+    ),
+    re_path(
+        rf"^{ORG}/appearance/$",
+        appearance.OrganizationAppearanceView.as_view(),
+        name="organization-appearance",
+    ),
+    re_path(
+        rf"^{ORG}/appearance/{ASSET}/$",
+        appearance.OrganizationAppearanceAssetView.as_view(),
+        name="organization-appearance-asset",
+    ),
+]
 
 app_name = "api"
-urlpatterns = router.urls
+urlpatterns = invitation_urls + appearance_urls + router.urls

@@ -8,11 +8,13 @@ import { Banner } from '@/components/Banner/Banner';
 import { Button } from '@/components/Button/Button';
 import { Card, CardBody, CardHeader } from '@/components/Card/Card';
 import { DataTable, type Column } from '@/components/DataTable/DataTable';
+import { TableExportButton } from '@/components/DataTable/TableExport';
+import { useTableExport } from '@/components/DataTable/useTableExport';
 import { ErrorState } from '@/components/ErrorState/ErrorState';
 import { ConfirmDialog } from '@/components/Modal/ConfirmDialog';
 import { Skeleton } from '@/components/Skeleton/Skeleton';
 import { useToast } from '@/components/Toast/useToast';
-import { useCan } from '@/features/tenancy/hooks';
+import { useCan, useOrganizationName } from '@/features/tenancy/hooks';
 import { PERMISSIONS } from '@/features/tenancy/model';
 import { NameDescriptionDialog } from '@/features/tenancy/components/NameDescriptionDialog';
 import type { OrganizationScope } from '@/features/tenancy/components/ScopeGate';
@@ -22,6 +24,8 @@ type Editing = { mode: 'create' } | { mode: 'edit'; site: SiteDto } | null;
 
 export function SitesCard({ scope }: { scope: OrganizationScope }) {
   const { tenantId, orgId } = scope;
+  const organizationName = useOrganizationName(tenantId, orgId);
+  const exporter = useTableExport();
   const queryClient = useQueryClient();
   const { notify } = useToast();
   const canManage = useCan(PERMISSIONS.manageSites);
@@ -51,6 +55,7 @@ export function SitesCard({ scope }: { scope: OrganizationScope }) {
     {
       key: 'name',
       header: 'Site',
+      sortValue: (site) => site.name,
       render: (site) => (
         <span className={styles.twoLine}>
           <span className={styles.primary}>{site.name}</span>
@@ -58,7 +63,7 @@ export function SitesCard({ scope }: { scope: OrganizationScope }) {
         </span>
       ),
     },
-    { key: 'networks', header: 'Networks', render: (site) => site.network_count },
+    { key: 'networks', header: 'Networks', render: (site) => site.network_count, sortValue: (site) => site.network_count },
   ];
   if (canManage) {
     columns.push({
@@ -86,11 +91,14 @@ export function SitesCard({ scope }: { scope: OrganizationScope }) {
         titleId="sites-title"
         description="Physical or logical locations: home, office, data center…"
         actions={
-          canManage && (
-            <Button size="sm" variant="primary" leftIcon={<Plus size={14} />} onClick={() => setEditing({ mode: 'create' })}>
-              Add site
-            </Button>
-          )
+          <>
+            <TableExportButton exporter={exporter} />
+            {canManage && (
+              <Button size="sm" variant="primary" leftIcon={<Plus size={14} />} onClick={() => setEditing({ mode: 'create' })}>
+                Add site
+              </Button>
+            )}
+          </>
         }
       />
       <CardBody>
@@ -100,7 +108,15 @@ export function SitesCard({ scope }: { scope: OrganizationScope }) {
         ) : sites.isError ? (
           <ErrorState error={sites.error} onRetry={() => void sites.refetch()} retrying={sites.isFetching} />
         ) : (
-          <DataTable label="Sites" columns={columns} rows={sites.data} rowKey={(site) => site.id} empty="No sites yet." />
+          <DataTable
+            label="Sites"
+            columns={columns}
+            rows={sites.data}
+            rowKey={(site) => site.id}
+            empty="No sites yet."
+            exportOwner={organizationName}
+            exporter={exporter}
+          />
         )}
       </CardBody>
 

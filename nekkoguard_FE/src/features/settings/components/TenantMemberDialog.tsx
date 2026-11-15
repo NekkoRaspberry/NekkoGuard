@@ -25,6 +25,7 @@ import {
   TENANT_ROLE_LABELS,
   TENANT_ROLES,
 } from '@/features/tenancy/model';
+import { useTenancy, useTenantName } from '@/features/tenancy/hooks';
 import styles from '@/features/tenancy/components/Management.module.css';
 import { NO_FORM_ERRORS, toFormErrors, type FormErrors } from '@/lib/apiForm';
 
@@ -33,10 +34,8 @@ const FIELDS = ['email', 'role', 'status', 'organization_access', 'default_organ
 interface Props {
   tenantId: string;
   member?: TenantMembershipDto;
-  /** All Organizations of the Tenant (for "selected organizations"). */
+  /** Organizations the caller administers (for "selected organizations"). */
   organizations: OrganizationDto[];
-  /** Editing your own membership: only owners may, and only the access part. */
-  isSelf: boolean;
   onClose: () => void;
   onSaved: (message: string) => void;
 }
@@ -45,7 +44,10 @@ interface Props {
  * Tenant membership = two independent things:
  * the tenant role (administration) and the organization access policy (infrastructure).
  */
-export function TenantMemberDialog({ tenantId, member, organizations, isSelf, onClose, onSaved }: Props) {
+export function TenantMemberDialog({ tenantId, member, organizations, onClose, onSaved }: Props) {
+  const tenantName = useTenantName(tenantId);
+  // The caller's own organization scope (a scoped admin may only grant within it).
+  const fullScope = useTenancy().tenants?.find((t) => t.id === tenantId)?.organization_access === 'all';
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<TenantRole>(member?.role ?? 'member');
   const [status, setStatus] = useState<MembershipStatus>(member?.status ?? 'active');
@@ -62,7 +64,7 @@ export function TenantMemberDialog({ tenantId, member, organizations, isSelf, on
         selected_organizations: access === 'selected' ? [...selected] : [],
       };
       if (!member) return tenancyApi.addTenantMember(tenantId, { email: email.trim(), role, ...accessPart });
-      return tenancyApi.updateTenantMember(tenantId, member.id, isSelf ? accessPart : { role, status, ...accessPart });
+      return tenancyApi.updateTenantMember(tenantId, member.id, { role, status, ...accessPart });
     },
     onSuccess: (saved) => {
       onSaved(member ? `${saved.user.email} updated` : `${saved.user.email} added`);
@@ -93,7 +95,7 @@ export function TenantMemberDialog({ tenantId, member, organizations, isSelf, on
       onOpenChange={(open) => !open && onClose()}
       size="md"
       icon={<Users size={18} />}
-      title={member ? `Edit ${member.user.email}` : 'Add a tenant member'}
+      title={member ? `Edit ${member.user.email}` : `Add a member to ${tenantName}`}
     >
       <form className={formStyles.form} onSubmit={handleSubmit} noValidate>
         {errors.form && <Banner tone="danger">{errors.form}</Banner>}
@@ -107,15 +109,13 @@ export function TenantMemberDialog({ tenantId, member, organizations, isSelf, on
             autoFocus
           />
         )}
-        {!isSelf && (
-          <>
-            <SelectField
+        <SelectField
               label="Tenant role"
               value={role}
               options={TENANT_ROLES.map((value) => ({ value, label: TENANT_ROLE_LABELS[value] }))}
               onChange={setRole}
               error={errors.fields.role ?? null}
-              hint="What they may administer in the tenant. It does not give access to infrastructure."
+              hint={`What they may administer in ${tenantName}. It does not give access to infrastructure.`}
             />
             {member && (
               <SelectField
@@ -127,18 +127,22 @@ export function TenantMemberDialog({ tenantId, member, organizations, isSelf, on
                 ]}
                 onChange={setStatus}
                 error={errors.fields.status ?? null}
-                hint="A suspended member is blocked everywhere in this tenant."
+                hint={`A suspended member is blocked everywhere in ${tenantName}.`}
               />
             )}
-          </>
-        )}
         <SelectField
           label="Organization access"
           value={access}
+          // Always offered. A scoped administrator cannot grant more than their own
+          // scope: the backend refuses it and the error is shown on this field.
           options={ORGANIZATION_ACCESS_OPTIONS.map((value) => ({ value, label: ORGANIZATION_ACCESS_LABELS[value] }))}
           onChange={setAccess}
           error={errors.fields.organization_access ?? null}
-          hint="Which organizations they reach through the tenant. Direct organization memberships are separate."
+          hint={
+            fullScope
+              ? `Which organizations they reach and administer through ${tenantName}. Direct organization memberships are separate.`
+              : `Which organizations they reach and administer through ${tenantName} — only among the organizations you administer.`
+          }
         />
         {access !== 'none' && (
           <SelectField
@@ -154,7 +158,7 @@ export function TenantMemberDialog({ tenantId, member, organizations, isSelf, on
           <div className={styles.fieldGroup} role="group" aria-label="Selected organizations">
             <span className={styles.fieldLabel}>Selected organizations</span>
             <div className={styles.checkList}>
-              {organizations.length === 0 && <span className={styles.muted}>This tenant has no organizations yet.</span>}
+              {organizations.length === 0 && <span className={styles.muted}>{tenantName} has no organizations yet.</span>}
               {organizations.map((o) => (
                 <Checkbox
                   key={o.id}

@@ -1,14 +1,4 @@
-import {
-  AppWindow,
-  Building2,
-  Layers,
-  LayoutDashboard,
-  MapPin,
-  ServerCog,
-  ShieldCheck,
-  UserRound,
-  type LucideIcon,
-} from 'lucide-react';
+import { Building2, Layers, LayoutDashboard, MapPin, UserRound, type LucideIcon } from 'lucide-react';
 import { ROUTES } from '@/app/routes';
 import { PERMISSIONS } from '@/features/tenancy/model';
 
@@ -16,8 +6,8 @@ import { PERMISSIONS } from '@/features/tenancy/model';
 export interface NavAccess {
   permissions: ReadonlySet<string>;
   hasOrganization: boolean;
-  hasTenantMembership: boolean;
-  isPlatformAdmin: boolean;
+  /** Tenant administrator (see canAdministerTenant). */
+  canAdministerTenant: boolean;
 }
 
 export interface NavItem {
@@ -38,6 +28,11 @@ export interface NavGroup {
 /**
  * Navigation reflects only what the backend implements today.
  * New modules are added here when their backend APIs exist.
+ *
+ * Settings has one entry per context, always in this order: the selected Tenant, the
+ * selected Organization, and the signed-in user's Profile. Each opens its own settings
+ * area (with its own pages, e.g. Appearance or Security); nothing is duplicated here.
+ * Platform administration (creating/deactivating Tenants) is Django admin only.
  */
 export const NAVIGATION: NavGroup[] = [
   {
@@ -60,31 +55,18 @@ export const NAVIGATION: NavGroup[] = [
     label: 'Settings',
     items: [
       {
+        label: 'Tenant',
+        to: ROUTES.tenantSettings,
+        icon: Layers,
+        visible: ({ canAdministerTenant }) => canAdministerTenant,
+      },
+      {
         label: 'Organization',
         to: ROUTES.organizationSettings,
         icon: Building2,
         visible: ({ hasOrganization }) => hasOrganization,
       },
-      {
-        label: 'Tenant',
-        to: ROUTES.tenantSettings,
-        icon: Layers,
-        visible: ({ hasTenantMembership }) => hasTenantMembership,
-      },
-      {
-        label: 'Platform',
-        to: ROUTES.platformTenants,
-        icon: ServerCog,
-        visible: ({ isPlatformAdmin }) => isPlatformAdmin,
-      },
-    ],
-  },
-  {
-    label: 'Account',
-    items: [
       { label: 'Profile', to: ROUTES.profile, icon: UserRound },
-      { label: 'Security', to: ROUTES.security, icon: ShieldCheck },
-      { label: 'Connected apps', to: ROUTES.connectedApps, icon: AppWindow },
     ],
   },
 ];

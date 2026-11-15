@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { NetworkDto, OrganizationDetailDto, OrganizationDto, SiteDto, TenantDto } from '@/api/tenancy';
+import type { MyOrganizationDto, NetworkDto, OrganizationDetailDto, OrganizationDto, SiteDto, TenantDto } from '@/api/tenancy';
 import type { Level, Selection } from './selection';
 
 export interface TenancyContextValue {
@@ -25,6 +25,11 @@ export interface TenancyContextValue {
   tenantPermissions: ReadonlySet<string>;
   /** Switches one level (resets the levels below it). */
   select: (level: Level, id: string | null) => void;
+  /** Every Organization the user can open, across Tenants (ordered by Tenant, then name). */
+  myOrganizations: MyOrganizationDto[] | undefined;
+  myOrganizationsError: unknown;
+  /** Opens an Organization; switches the Tenant too when it belongs to another one. */
+  selectOrganization: (orgId: string) => void;
 }
 
 export const TenancyContext = createContext<TenancyContextValue | null>(null);

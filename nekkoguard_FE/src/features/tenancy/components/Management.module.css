@@ -12,6 +12,15 @@
   justify-content: flex-end;
 }
 
+/* Page-level actions above the content (e.g. back link + related page). */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
 .primary {
   color: var(--text-primary);
   font-weight: 500;

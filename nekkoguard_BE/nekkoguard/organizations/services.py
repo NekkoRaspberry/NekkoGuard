@@ -3,16 +3,17 @@ Write operations, with the rules that must hold no matter which view calls them.
 
 Anti-escalation rules:
 
-- Nobody changes their own memberships or overrides. One exception: a Tenant
-  **owner** may change their own *organization access* settings (never their own
-  role or status), so a single-person Tenant can still reach its Organizations.
-  Every such change is audit-logged.
+- Nobody changes their own memberships or overrides (a superuser fixes those).
 - Roles are only handed out up to the actor's own level (``roles.*_ASSIGNABLE``),
   and members holding a higher role cannot be changed.
 - Organization-level managers (``members.manage`` in that Organization) cannot
   touch users who administer the Tenant, and can only GRANT permissions they hold.
-- Every Tenant keeps at least one active owner.
+- Every Tenant keeps at least one active administrator: the last one cannot be
+  demoted, suspended or removed.
 - A Tenant membership can only select Organizations of the same Tenant.
+- Tenant rights only apply inside the actor's organization scope (``access.py``): a
+  scoped administrator manages only members whose organization access stays within
+  their scope, grants access only within it, and Organizations they create join it.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from rest_framework.exceptions import ValidationError
 from .access import OrganizationContext
 from .access import TenantAccess
 from .access import reaches_through_tenant
+from .access import within_scope
 from .models import ActivityEntry
 from .models import MembershipStatus
 from .models import Organization
@@ -92,34 +94,6 @@ def _changes(instance: models.Model, values: dict[str, Any]) -> dict[str, list[A
 # ---------------------------------------------------------------- tenants
 
 
-@transaction.atomic
-def create_tenant(
-    *,
-    name: str,
-    description: str,
-    owner: User,
-    created_by: User,
-) -> Tenant:
-    """
-    A new Tenant starts with one active owner. The owner administers the Tenant but
-    reaches no Organization until access is configured (secure default).
-    """
-    tenant = Tenant.objects.create(
-        name=name,
-        description=description,
-        created_by=created_by,
-    )
-    TenantMembership.objects.create(tenant=tenant, user=owner, role=TenantRole.OWNER)
-    record_activity(
-        tenant=tenant,
-        actor=created_by,
-        action="tenant.created",
-        target=tenant,
-        details={"owner": owner.email},
-    )
-    return tenant
-
-
 def update_tenant(*, actor: User, tenant: Tenant, **values: Any) -> Tenant:
     changes = _changes(tenant, values)
     if not changes:
@@ -149,15 +123,32 @@ def create_organization(
     name: str,
     description: str,
 ) -> Organization:
-    """Creating an Organization grants nobody access to it implicitly."""
+    """
+    Creating an Organization grants nobody else access to it. A creator limited to
+    selected Organizations gets it added to their selection (otherwise they could
+    not administer what they just created).
+    """
     if not actor.can(TenantPermission.MANAGE_ORGANIZATIONS):
         raise PermissionDenied(_("You cannot create organizations in this tenant."))
+    access = actor.membership.organization_access
+    if access == OrganizationAccess.NONE:
+        raise PermissionDenied(
+            _(
+                "Your tenant membership gives you no organizations. Ask an "
+                "administrator to give you organization access first.",
+            ),
+        )
     organization = Organization.objects.create(
         tenant=actor.tenant,
         name=name,
         description=description,
         created_by=actor.membership.user,
     )
+    if access == OrganizationAccess.SELECTED and actor.membership.pk is not None:
+        TenantOrganizationAccess.objects.create(
+            membership=actor.membership,
+            organization=organization,
+        )
     record_activity(
         tenant=actor.tenant,
         organization=organization,
@@ -206,27 +197,51 @@ def _ensure_tenant_manager(actor: TenantAccess) -> None:
         raise PermissionDenied(_("You cannot manage members of this tenant."))
 
 
+def _ensure_within_scope(
+    actor: TenantAccess,
+    access: str,
+    selected: Iterable[Organization],
+) -> None:
+    """Scoped administrators only handle organization access within their scope."""
+    if not within_scope(actor, access, {org.pk for org in selected}):
+        raise PermissionDenied(
+            _(
+                "You can only manage access to the organizations you administer.",
+            ),
+        )
+
+
+def may_manage_tenant_member(actor: TenantAccess, target: TenantMembership) -> bool:
+    """For the UI: may ``actor`` edit or remove ``target`` (the backend re-checks)?"""
+    if not actor.can(TenantPermission.MANAGE_MEMBERS) or not actor.covers(target):
+        return False
+    if target.pk == actor.membership.pk:
+        return False  # nobody changes their own membership
+    return target.role in TENANT_ASSIGNABLE.get(actor.membership.role, frozenset())
+
+
 def _ensure_tenant_role_assignable(actor: TenantAccess, role: str) -> None:
     if role not in TENANT_ASSIGNABLE.get(actor.membership.role, frozenset()):
         raise PermissionDenied(_("You cannot assign or change this tenant role."))
 
 
-def _other_active_owners(target: TenantMembership) -> bool:
-    # Lock every owner row: two concurrent demotions must not both see "another
-    # owner remains" and leave the tenant without one.
-    owners = TenantMembership.objects.select_for_update().filter(
+def _other_active_admins(target: TenantMembership) -> bool:
+    # Lock every administrator row: two concurrent demotions must not both see
+    # "another administrator remains" and leave the tenant without one.
+    admins = TenantMembership.objects.select_for_update().filter(
         tenant_id=target.tenant_id,
-        role=TenantRole.OWNER,
+        role=TenantRole.ADMIN,
         status=MembershipStatus.ACTIVE,
     )
-    return any(owner.pk != target.pk for owner in owners)
+    return any(admin.pk != target.pk for admin in admins)
 
 
-def _ensure_owner_remains(target: TenantMembership, *, stays_owner: bool) -> None:
-    is_active_owner = target.role == TenantRole.OWNER and target.is_active
-    if is_active_owner and not stays_owner and not _other_active_owners(target):
+def _ensure_admin_remains(target: TenantMembership, *, stays_admin: bool) -> None:
+    """The last active administrator cannot be demoted, suspended or removed."""
+    is_active_admin = target.role == TenantRole.ADMIN and target.is_active
+    if is_active_admin and not stays_admin and not _other_active_admins(target):
         raise ValidationError(
-            {"role": [_("A tenant needs at least one active owner.")]},
+            {"role": [_("A tenant needs at least one active administrator.")]},
         )
 
 
@@ -301,6 +316,7 @@ def add_tenant_member(  # noqa: PLR0913
         default_organization_role,
         selected_organizations,
     )
+    _ensure_within_scope(actor, organization_access, selected)
     membership = TenantMembership.objects.create(
         tenant=tenant,
         user=user,
@@ -325,11 +341,6 @@ def add_tenant_member(  # noqa: PLR0913
     return membership
 
 
-_ACCESS_FIELDS = frozenset(
-    {"organization_access", "default_organization_role", "selected_organizations"},
-)
-
-
 @transaction.atomic
 def update_tenant_member(
     *,
@@ -339,17 +350,19 @@ def update_tenant_member(
 ) -> TenantMembership:
     target = TenantMembership.objects.select_for_update().get(pk=target.pk)
     _ensure_tenant_manager(actor)
+    if not actor.covers(target):
+        raise PermissionDenied(
+            _("You can only manage members whose access is within your organizations."),
+        )
     if target.pk == actor.membership.pk:
-        # Owners may adjust their own Organization access, nothing else.
-        if actor.membership.role != TenantRole.OWNER or set(values) - _ACCESS_FIELDS:
-            raise PermissionDenied(_("You cannot change your own membership."))
+        raise PermissionDenied(_("You cannot change your own membership."))
     _ensure_tenant_role_assignable(actor, target.role)
     new_role = values.get("role", target.role)
     new_status = values.get("status", target.status)
     _ensure_tenant_role_assignable(actor, new_role)
-    _ensure_owner_remains(
+    _ensure_admin_remains(
         target,
-        stays_owner=new_role == TenantRole.OWNER
+        stays_admin=new_role == TenantRole.ADMIN
         and new_status == MembershipStatus.ACTIVE,
     )
     new_access = values.get("organization_access", target.organization_access)
@@ -367,6 +380,7 @@ def update_tenant_member(
     else:
         selected_input = [g.organization for g in target.organization_grants.all()]
     selected = _clean_access(target.tenant, new_access, new_default, selected_input)
+    _ensure_within_scope(actor, new_access, selected)
 
     before_selected = _selected_ids(target)
     changes = _changes(
@@ -402,10 +416,14 @@ def update_tenant_member(
 def remove_tenant_member(*, actor: TenantAccess, target: TenantMembership) -> None:
     target = TenantMembership.objects.select_for_update().get(pk=target.pk)
     _ensure_tenant_manager(actor)
+    if not actor.covers(target):
+        raise PermissionDenied(
+            _("You can only manage members whose access is within your organizations."),
+        )
     if target.pk == actor.membership.pk:
         raise PermissionDenied(_("You cannot change your own membership."))
     _ensure_tenant_role_assignable(actor, target.role)
-    _ensure_owner_remains(target, stays_owner=False)
+    _ensure_admin_remains(target, stays_admin=False)
     record_activity(
         tenant=target.tenant,
         actor=actor.membership.user,
@@ -470,12 +488,9 @@ def _ensure_may_manage_user(actor: OrganizationActor, user: User) -> None:
         raise PermissionDenied(_("You cannot change your own access."))
     tm, om = _target_standing(actor.organization, user)
     if actor.is_tenant_manager:
-        # Only a Tenant owner may change what another Tenant owner can do.
-        if tm and tm.role == TenantRole.OWNER and actor.tenant_role != TenantRole.OWNER:
-            raise PermissionDenied(_("You cannot change a tenant owner's access."))
         return
     # Organization-level managers never touch Tenant administrators.
-    if tm and tm.role in {TenantRole.OWNER, TenantRole.ADMIN}:
+    if tm and tm.role == TenantRole.ADMIN:
         raise PermissionDenied(_("You cannot change a tenant administrator's access."))
     target_roles = set()
     if om is not None:

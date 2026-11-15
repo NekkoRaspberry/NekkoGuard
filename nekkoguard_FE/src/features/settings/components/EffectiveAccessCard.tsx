@@ -8,12 +8,15 @@ import { Banner } from '@/components/Banner/Banner';
 import { Button } from '@/components/Button/Button';
 import { Card, CardBody, CardHeader } from '@/components/Card/Card';
 import { DataTable, type Column } from '@/components/DataTable/DataTable';
+import { TableExportButton } from '@/components/DataTable/TableExport';
+import { useTableExport } from '@/components/DataTable/useTableExport';
 import { ErrorState } from '@/components/ErrorState/ErrorState';
 import { Modal } from '@/components/Modal/Modal';
 import { Skeleton } from '@/components/Skeleton/Skeleton';
 import { StatusPill } from '@/components/StatusPill/StatusPill';
 import { useCurrentUser } from '@/features/account/hooks/useCurrentUser';
-import { ORGANIZATION_ROLE_LABELS } from '@/features/tenancy/model';
+import { useOrganizationName, useTenantName } from '@/features/tenancy/hooks';
+import { ORGANIZATION_ROLE_LABELS, ORGANIZATION_ROLES } from '@/features/tenancy/model';
 import styles from '@/features/tenancy/components/Management.module.css';
 import { cx } from '@/lib/cx';
 import { DecisionTable } from './DecisionTable';
@@ -35,13 +38,14 @@ function displayName(access: EffectiveAccessDto): string {
 }
 
 function HowCell({ access }: { access: EffectiveAccessDto }) {
+  const tenantName = useTenantName();
   return (
     <span className={styles.chips}>
       {access.organization_role && (
         <StatusPill tone="info" label={`Direct: ${ORGANIZATION_ROLE_LABELS[access.organization_role]}`} />
       )}
       {access.inherited_role && (
-        <StatusPill tone="neutral" label={`From tenant: ${ORGANIZATION_ROLE_LABELS[access.inherited_role]}`} />
+        <StatusPill tone="neutral" label={`From ${tenantName}: ${ORGANIZATION_ROLE_LABELS[access.inherited_role]}`} />
       )}
     </span>
   );
@@ -51,14 +55,19 @@ function OverrideEditor({
   scope,
   access,
   overrides,
+  readOnly,
   onClose,
 }: {
   scope: Scope;
   access: EffectiveAccessDto;
   overrides: PermissionOverrideDto[];
+  /** Without members.manage: the person's permissions are shown, not changeable. */
+  readOnly: boolean;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const organizationName = useOrganizationName(scope.tenantId, scope.orgId);
+  const exporter = useTableExport();
   const mine = new Map(overrides.filter((o) => o.user.id === access.user.id).map((o) => [o.permission, o]));
 
   const change = useMutation({
@@ -79,14 +88,21 @@ function OverrideEditor({
     <Modal
       open
       onOpenChange={(open) => !open && onClose()}
-      size="md"
+      size="lg"
       icon={<KeyRound size={18} />}
       title={`Permissions of ${displayName(access)}`}
-      description="Inherit uses the person's roles. Grant and Deny apply to this organization only; an explicit Deny always wins."
+      description={
+        readOnly
+          ? 'What this person may do in this organization, and where each permission comes from.'
+          : "Inherit uses the person's roles. Grant and Deny apply to this organization only; an explicit Deny always wins."
+      }
       footer={
-        <Button variant="primary" onClick={onClose}>
-          Done
-        </Button>
+        <>
+          <TableExportButton exporter={exporter} />
+          <Button variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        </>
       }
     >
       <div className={styles.stack}>
@@ -95,7 +111,9 @@ function OverrideEditor({
         <DecisionTable
           decisions={access.decisions}
           label={`Permissions of ${displayName(access)}`}
-          extra={{
+          exportOwner={organizationName}
+          exporter={exporter}
+          extra={readOnly ? undefined : {
             header: 'Override',
             render: (decision) => {
               const current: Choice = mine.get(decision.permission)?.effect ?? 'inherit';
@@ -126,9 +144,15 @@ function OverrideEditor({
   );
 }
 
-/** Everyone who reaches the Organization, how, and with which effective permissions. */
-export function EffectiveAccessCard({ scope }: { scope: Scope }) {
+/**
+ * Everyone who reaches the Organization, how, and with which effective permissions.
+ * Read-only (a "View" per person) unless `canManage` (members.manage).
+ */
+export function EffectiveAccessCard({ scope, canManage }: { scope: Scope; canManage: boolean }) {
   const { tenantId, orgId } = scope;
+  const tenantName = useTenantName(tenantId);
+  const organizationName = useOrganizationName(tenantId, orgId);
+  const exporter = useTableExport();
   const me = useCurrentUser().data;
   const [editingUser, setEditingUser] = useState<number | null>(null);
 
@@ -145,6 +169,8 @@ export function EffectiveAccessCard({ scope }: { scope: Scope }) {
     {
       key: 'user',
       header: 'Person',
+      sortValue: (a) => displayName(a),
+      exportValue: (a) => (a.user.name ? `${a.user.name} (${a.user.email})` : a.user.email),
       render: (a) => (
         <span className={styles.twoLine}>
           <span className={styles.primary}>{displayName(a)}</span>
@@ -152,10 +178,28 @@ export function EffectiveAccessCard({ scope }: { scope: Scope }) {
         </span>
       ),
     },
-    { key: 'how', header: 'Access through', render: (a) => <HowCell access={a} />, secondary: true },
+    {
+      key: 'how',
+      header: 'Access through',
+      render: (a) => <HowCell access={a} />,
+      exportValue: (a) =>
+        [
+          a.organization_role && `Direct: ${ORGANIZATION_ROLE_LABELS[a.organization_role]}`,
+          a.inherited_role && `From ${tenantName}: ${ORGANIZATION_ROLE_LABELS[a.inherited_role]}`,
+        ]
+          .filter(Boolean)
+          .join('; '),
+      // Direct roles before inherited ones, each by rank (owner first).
+      sortValue: (a) => {
+        const role = a.organization_role ?? a.inherited_role;
+        return role ? (a.organization_role ? 0 : ORGANIZATION_ROLES.length) + ORGANIZATION_ROLES.indexOf(role) : null;
+      },
+      secondary: true,
+    },
     {
       key: 'overrides',
       header: 'Overrides',
+      sortValue: (a) => a.decisions.filter((d) => d.source === 'override').length,
       render: (a) => {
         const count = a.decisions.filter((d) => d.source === 'override').length;
         return count ? <StatusPill tone="primary" label={`${count} override${count > 1 ? 's' : ''}`} /> : <span className={styles.muted}>—</span>;
@@ -165,6 +209,8 @@ export function EffectiveAccessCard({ scope }: { scope: Scope }) {
     {
       key: 'permissions',
       header: 'Allowed',
+      sortValue: (a) => a.permissions.length,
+      exportValue: (a) => `${a.permissions.length} of ${a.decisions.length}`,
       render: (a) => `${a.permissions.length} of ${a.decisions.length}`,
     },
     {
@@ -172,7 +218,11 @@ export function EffectiveAccessCard({ scope }: { scope: Scope }) {
       header: <span className="visually-hidden">Actions</span>,
       align: 'end',
       render: (a) =>
-        a.user.id === me?.id ? (
+        !canManage ? (
+          <Button size="sm" variant="secondary" onClick={() => setEditingUser(a.user.id)}>
+            View
+          </Button>
+        ) : a.user.id === me?.id ? (
           <span className={styles.sub}>You</span>
         ) : (
           <Button size="sm" variant="secondary" onClick={() => setEditingUser(a.user.id)}>
@@ -188,9 +238,10 @@ export function EffectiveAccessCard({ scope }: { scope: Scope }) {
     <Card aria-labelledby="access-title">
       <CardHeader
         icon={<ShieldCheck size={16} />}
-        title="Access & permissions"
+        title="Permissions"
         titleId="access-title"
-        description="Effective permissions, resolved by the server. Inherited permissions come from the person's tenant access; overrides apply to this organization only."
+        description={`Effective permissions, resolved by the server. Inherited permissions come from the person's access to ${tenantName}; overrides apply to this organization only.`}
+        actions={<TableExportButton exporter={exporter} />}
       />
       <CardBody>
         {accessList.isPending || overrides.isPending ? (
@@ -206,11 +257,19 @@ export function EffectiveAccessCard({ scope }: { scope: Scope }) {
             rows={accessList.data}
             rowKey={(a) => a.user.id}
             empty="Nobody reaches this organization yet."
+            exportOwner={organizationName}
+            exporter={exporter}
           />
         )}
       </CardBody>
       {editing && overrides.data && (
-        <OverrideEditor scope={scope} access={editing} overrides={overrides.data} onClose={() => setEditingUser(null)} />
+        <OverrideEditor
+          scope={scope}
+          access={editing}
+          overrides={overrides.data}
+          readOnly={!canManage}
+          onClose={() => setEditingUser(null)}
+        />
       )}
     </Card>
   );

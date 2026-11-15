@@ -1,19 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
-import { useParams } from 'react-router';
+import { ArrowLeft, Palette } from 'lucide-react';
 import { queryKeys } from '@/api/queryKeys';
 import { tenancyApi } from '@/api/tenancy';
 import { ROUTES } from '@/app/routes';
 import { ButtonLink } from '@/components/Button/Button';
 import { ErrorState } from '@/components/ErrorState/ErrorState';
 import { Skeleton } from '@/components/Skeleton/Skeleton';
-import { PageHeader } from '@/layout/PageHeader/PageHeader';
-import { useCanTenant, useContextSearch, useTenancy } from '@/features/tenancy/hooks';
+import { useCanTenant, useIsPlatformAdmin, useTenancy } from '@/features/tenancy/hooks';
 import { TENANT_PERMISSIONS } from '@/features/tenancy/model';
-import { RequireTenant } from '@/features/tenancy/components/ScopeGate';
+import { RequireTenant, TenantOrganizationScope } from '@/features/tenancy/components/ScopeGate';
 import { isUuid } from '@/features/tenancy/selection';
 import styles from '@/features/tenancy/components/Management.module.css';
-import { organizationCapabilities } from '../capabilities';
+import { canManageTenantAppearance, organizationCapabilities } from '../capabilities';
+import { manageOrganization, useManagedOrganizationId } from '../managedOrganization';
 import { ActivityCard } from '../components/ActivityCard';
 import { EffectiveAccessCard } from '../components/EffectiveAccessCard';
 import { MyAccessCard } from '../components/MyAccessCard';
@@ -26,7 +25,6 @@ import { TenantOrganizationsCard } from '../components/TenantOrganizationsCard';
 export function TenantDetailsPage() {
   return (
     <div className={styles.stack}>
-      <PageHeader title="Tenant" description="The management environment that owns your organizations." />
       <RequireTenant>{({ tenant }) => <TenantDetailsCard key={tenant.id} tenant={tenant} />}</RequireTenant>
     </div>
   );
@@ -35,7 +33,6 @@ export function TenantDetailsPage() {
 export function TenantOrganizationsPage() {
   return (
     <div className={styles.stack}>
-      <PageHeader title="Organizations" description="Infrastructure environments of the current tenant." />
       <RequireTenant>{({ tenantId }) => <TenantOrganizationsCard key={tenantId} tenantId={tenantId} />}</RequireTenant>
     </div>
   );
@@ -45,13 +42,12 @@ export function TenantMembersPage() {
   const canManage = useCanTenant(TENANT_PERMISSIONS.manageMembers);
   return (
     <div className={styles.stack}>
-      <PageHeader title="Tenant members" description="Tenant roles and organization access policies." />
       <RequireTenant>
         {({ tenantId, tenant }) =>
           canManage ? (
-            <TenantMembersCard key={tenantId} tenantId={tenantId} myRole={tenant.role} />
+            <TenantMembersCard key={tenantId} tenantId={tenantId} />
           ) : (
-            <p className={styles.muted}>You have no permission to manage the members of this tenant.</p>
+            <p className={styles.muted}>You have no permission to manage the members of {tenant.name}.</p>
           )
         }
       </RequireTenant>
@@ -63,18 +59,18 @@ export function TenantActivityPage() {
   const canView = useCanTenant(TENANT_PERMISSIONS.viewActivity);
   return (
     <div className={styles.stack}>
-      <PageHeader title="Tenant activity" description="Everything changed in this tenant and its organizations." />
       <RequireTenant>
-        {({ tenantId }) =>
+        {({ tenantId, tenant }) =>
           canView ? (
             <ActivityCard
               key={tenantId}
+              owner={tenant.name}
               description="Tenant, membership, permission and infrastructure changes."
-              queryKey={(page) => queryKeys.tenantActivity(tenantId, page)}
-              fetchPage={(page, signal) => tenancyApi.tenantActivity(tenantId, page, signal)}
+              queryKey={(page, ordering) => queryKeys.tenantActivity(tenantId, page, ordering)}
+              fetchPage={(page, signal, ordering) => tenancyApi.tenantActivity(tenantId, page, signal, ordering)}
             />
           ) : (
-            <p className={styles.muted}>You have no permission to view this tenant&apos;s activity.</p>
+            <p className={styles.muted}>You have no permission to view the activity of {tenant.name}.</p>
           )
         }
       </RequireTenant>
@@ -99,14 +95,15 @@ function TenantOrganizationManagement({ tenantId, orgId }: { tenantId: string; o
   return (
     <>
       <OrganizationDetailsCard tenantId={tenantId} organization={detail} capabilities={can} />
-      <MyAccessCard access={detail.my_access} />
-      {can.canManageAccess && <OrganizationMembersCard scope={scope} />}
-      {can.canManageAccess && <EffectiveAccessCard scope={scope} />}
+      <MyAccessCard access={detail.my_access} organizationName={detail.name} />
+      {can.canViewAccess && <OrganizationMembersCard scope={scope} canManage={can.canManageAccess} />}
+      {can.canViewAccess && <EffectiveAccessCard scope={scope} canManage={can.canManageAccess} />}
       {can.canViewActivity && (
         <ActivityCard
+          owner={detail.name}
           description="Changes made in this organization."
-          queryKey={(page) => queryKeys.organizationActivity(tenantId, orgId, page)}
-          fetchPage={(page, signal) => tenancyApi.organizationActivity(tenantId, orgId, page, signal)}
+          queryKey={(page, ordering) => queryKeys.organizationActivity(tenantId, orgId, page, ordering)}
+          fetchPage={(page, signal, ordering) => tenancyApi.organizationActivity(tenantId, orgId, page, signal, ordering)}
         />
       )}
     </>
@@ -114,28 +111,24 @@ function TenantOrganizationManagement({ tenantId, orgId }: { tenantId: string; o
 }
 
 export function TenantOrganizationPage() {
-  const { orgId } = useParams();
-  const search = useContextSearch();
+  const orgId = useManagedOrganizationId();
+  const { tenantPermissions } = useTenancy();
+  const isPlatformAdmin = useIsPlatformAdmin();
   return (
     <div className={styles.stack}>
-      <PageHeader
-        title="Manage organization"
-        description="Details, members and permissions of one organization of this tenant."
-        actions={
-          <ButtonLink size="sm" variant="ghost" leftIcon={<ArrowLeft size={14} />} to={`${ROUTES.tenantOrganizations}${search}`}>
-            All organizations
+      <div className={styles.toolbar}>
+        <ButtonLink size="sm" variant="ghost" leftIcon={<ArrowLeft size={14} />} to={ROUTES.tenantOrganizations}>
+          All organizations
+        </ButtonLink>
+        {isUuid(orgId) && canManageTenantAppearance(tenantPermissions, isPlatformAdmin) && (
+          <ButtonLink size="sm" variant="secondary" leftIcon={<Palette size={14} />} to={ROUTES.tenantOrganizationAppearance} state={manageOrganization(orgId)}>
+            Appearance
           </ButtonLink>
-        }
-      />
-      <RequireTenant>
-        {({ tenantId }) =>
-          isUuid(orgId) ? (
-            <TenantOrganizationManagement key={`${tenantId}/${orgId}`} tenantId={tenantId} orgId={orgId} />
-          ) : (
-            <p className={styles.muted}>This organization does not exist.</p>
-          )
-        }
-      </RequireTenant>
+        )}
+      </div>
+      <TenantOrganizationScope orgId={orgId}>
+        {(tenantId, id) => <TenantOrganizationManagement key={`${tenantId}/${id}`} tenantId={tenantId} orgId={id} />}
+      </TenantOrganizationScope>
     </div>
   );
 }

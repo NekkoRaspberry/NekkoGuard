@@ -1,7 +1,9 @@
-import { useContext, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useContext } from 'react';
+import { queryKeys } from '@/api/queryKeys';
+import { tenancyApi } from '@/api/tenancy';
 import { useCurrentUser } from '@/features/account/hooks/useCurrentUser';
 import type { Permission, TenantPermission } from './model';
-import { LEVELS } from './selection';
 import { TenancyContext, type TenancyContextValue } from './TenancyContext';
 
 /** Full context. Must be used below `TenancyProvider` (inside the app shell). */
@@ -13,6 +15,30 @@ export function useTenancy(): TenancyContextValue {
 
 export function useCurrentTenant() {
   return useTenancy().currentTenant;
+}
+
+/**
+ * Display name of a Tenant — the selected one by default. Texts name the Tenant
+ * ("Inherited from Acme MSP") instead of a generic "tenant": a user may work with
+ * several tenants, like several providers.
+ */
+export function useTenantName(tenantId?: string | null): string {
+  const { tenants, currentTenant } = useTenancy();
+  const id = tenantId ?? currentTenant?.id;
+  return tenants?.find((t) => t.id === id)?.name ?? currentTenant?.name ?? 'the tenant';
+}
+
+/**
+ * Display name of an Organization (e.g. for export file names). Shares the detail query
+ * the pages already load, so it normally costs no extra request.
+ */
+export function useOrganizationName(tenantId: string, orgId: string): string {
+  const detail = useQuery({
+    queryKey: queryKeys.organization(tenantId, orgId),
+    queryFn: ({ signal }) => tenancyApi.getOrganization(tenantId, orgId, signal),
+    staleTime: 60_000,
+  });
+  return detail.data?.name ?? 'Organization';
 }
 
 export function useCurrentOrganization() {
@@ -40,22 +66,6 @@ export function useIsPlatformAdmin(): boolean {
   return useCurrentUser().data?.isStaff ?? false;
 }
 
-/**
- * Query string carrying the current context (`?tenant=…&org=…`), so in-app links keep
- * the context instead of falling back to the remembered default.
- */
-export function useContextSearch(): string {
-  const { selection } = useTenancy();
-  return useMemo(() => {
-    const params = new URLSearchParams();
-    for (const level of LEVELS) {
-      const value = selection[level];
-      if (value) params.set(level, value);
-    }
-    const text = params.toString();
-    return text ? `?${text}` : '';
-  }, [selection]);
-}
 
 /** Tenant and Organization ids for pages that require both (null until selected). */
 export function useOrganizationScope(): { tenantId: string; orgId: string } | null {

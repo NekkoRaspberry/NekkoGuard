@@ -1,16 +1,21 @@
 import { isUuid, type Selection, type SelectionDefaults } from './selection';
 
 /**
- * Last chosen Tenant / Organization per browser — a convenience only. These values are
- * re-validated against the backend's lists before use; storage failures are ignored.
+ * Rule 1: the last chosen Tenant / Organization, remembered per user in this browser
+ * (so it survives closing the app, and one user's choice never decides where another
+ * user lands). A convenience only: values are re-validated against the backend's
+ * lists before use; storage failures are ignored.
  */
-const TENANT_KEY = 'nekkoguard.context.tenant';
-const ORG_KEY = 'nekkoguard.context.orgByTenant';
+const PREFIX = 'nekkoguard.context';
+const tenantKey = (userId: number) => `${PREFIX}.${userId}.tenant`;
+const orgKey = (userId: number) => `${PREFIX}.${userId}.orgByTenant`;
+const NONE: SelectionDefaults = { tenant: null, orgByTenant: {} };
 
-export function readDefaults(): SelectionDefaults {
+export function readDefaults(userId: number | null): SelectionDefaults {
+  if (userId === null) return NONE;
   try {
-    const tenant = window.localStorage.getItem(TENANT_KEY);
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(ORG_KEY) ?? '{}');
+    const tenant = window.localStorage.getItem(tenantKey(userId));
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(orgKey(userId)) ?? '{}');
     const orgByTenant: Record<string, string> = {};
     if (typeof parsed === 'object' && parsed !== null) {
       for (const [key, value] of Object.entries(parsed)) {
@@ -19,18 +24,21 @@ export function readDefaults(): SelectionDefaults {
     }
     return { tenant: isUuid(tenant) ? tenant : null, orgByTenant };
   } catch {
-    return { tenant: null, orgByTenant: {} };
+    return NONE;
   }
 }
 
-export function rememberSelection(selection: Selection): void {
+export function rememberSelection(selection: Selection, userId: number | null): void {
+  if (userId === null || !selection.tenant) return;
   try {
-    if (!selection.tenant) return;
-    window.localStorage.setItem(TENANT_KEY, selection.tenant);
+    window.localStorage.setItem(tenantKey(userId), selection.tenant);
     if (selection.org) {
-      const { orgByTenant } = readDefaults();
-      window.localStorage.setItem(ORG_KEY, JSON.stringify({ ...orgByTenant, [selection.tenant]: selection.org }));
+      const { orgByTenant } = readDefaults(userId);
+      window.localStorage.setItem(orgKey(userId), JSON.stringify({ ...orgByTenant, [selection.tenant]: selection.org }));
     }
+    // Pre-per-user keys (shared by every user of the browser) are no longer used.
+    window.localStorage.removeItem(`${PREFIX}.tenant`);
+    window.localStorage.removeItem(`${PREFIX}.orgByTenant`);
   } catch {
     // preference simply won't persist
   }

@@ -14,6 +14,11 @@ export interface Crumb {
 /** Route `handle` used to build the breadcrumb trail. */
 export interface RouteHandle {
   crumbs: Crumb[];
+  /**
+   * Page title for layouts that render the page header themselves (Settings).
+   * `{tenant}` in the description is replaced with the selected Tenant's name.
+   */
+  page?: { title: string; description: string };
 }
 
 function isRouteHandle(handle: unknown): handle is RouteHandle {
@@ -44,8 +49,6 @@ export function TopBar({ onOpenNavigation }: { onOpenNavigation: () => void }) {
         >
           <Menu size={18} />
         </button>
-        <ContextBar />
-        <span className={styles.divider} aria-hidden="true" />
         <nav aria-label="Breadcrumb" className={styles.breadcrumbs}>
           <ol className={styles.crumbs}>
             {crumbs.map((crumb, index) => {
@@ -68,7 +71,12 @@ export function TopBar({ onOpenNavigation }: { onOpenNavigation: () => void }) {
           </ol>
         </nav>
       </div>
-      <UserMenu />
+      <div className={styles.center}>
+        <ContextBar />
+      </div>
+      <div className={styles.right}>
+        <UserMenu />
+      </div>
     </header>
   );
 }

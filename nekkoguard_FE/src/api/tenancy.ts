@@ -9,8 +9,8 @@ import { apiRequest } from './client';
 
 // ---------------------------------------------------------------- shared
 
-export type TenantRole = 'owner' | 'admin' | 'member';
-export type OrganizationRole = 'owner' | 'admin' | 'security_analyst' | 'operator' | 'viewer';
+export type TenantRole = 'admin' | 'member';
+export type OrganizationRole = 'admin' | 'security_analyst' | 'operator' | 'viewer';
 export type OrganizationAccess = 'all' | 'selected' | 'none';
 export type MembershipStatus = 'active' | 'suspended';
 export type Effect = 'grant' | 'deny';
@@ -50,6 +50,14 @@ export interface TenantDto {
   /** Null for users who only reach Organizations directly (no Tenant membership). */
   role: TenantRole | null;
   permissions: string[];
+  /**
+   * The caller's organization scope here. Tenant rights (permissions above) apply
+   * only to those Organizations — every role, administrators included. Null = not a member.
+   */
+  organization_access: OrganizationAccess | null;
+  /** The Tenant to open when nothing is remembered (backend rules: first Tenant with an
+   *  Organization the user can open; the demo Tenant for superusers without memberships). */
+  is_default: boolean;
   created_at: string;
 }
 
@@ -66,6 +74,8 @@ export interface TenantMembershipDto {
   organization_access: OrganizationAccess;
   default_organization_role: OrganizationRole | '';
   selected_organizations: string[];
+  /** May the caller edit/remove this member (role rank and organization scope)? */
+  can_manage: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -93,8 +103,18 @@ export interface OrganizationDto {
   is_active: boolean;
   /** Whether the caller reaches this Organization's infrastructure. */
   has_access: boolean;
+  /** Whether the caller's Tenant rights apply here (it is in their organization scope). */
+  can_administer: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/** An Organization the caller can open, in any of their Tenants (organization switcher). */
+export interface MyOrganizationDto {
+  id: string;
+  name: string;
+  tenant: string;
+  tenant_name: string;
 }
 
 export interface DecisionDto {
@@ -131,6 +151,51 @@ export interface OrganizationMembershipDto {
   created_at: string;
   updated_at: string;
 }
+
+export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
+
+/** Invitation of someone without an account (the token is never sent to the app). */
+export interface OrganizationInvitationDto {
+  id: string;
+  email: string;
+  role: OrganizationRole;
+  status: InvitationStatus;
+  invited_by: UserSummaryDto | null;
+  expires_at: string;
+  last_sent_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
+/** "Add member" by email: existing account → added; otherwise → invitation emailed. */
+export type AddMemberResultDto =
+  | { result: 'added'; membership: OrganizationMembershipDto }
+  | { result: 'invited'; invitation: OrganizationInvitationDto };
+
+/** Public view of an emailed invitation link (details only while it is pending). */
+export type InvitationLinkDto =
+  | {
+      status: 'pending';
+      email: string;
+      organization_name: string;
+      invited_by: string;
+      role: OrganizationRole;
+      expires_at: string;
+    }
+  | { status: Exclude<InvitationStatus, 'pending'> | 'unavailable' };
+
+export interface InvitationAcceptedDto {
+  tenant: string;
+  organization: string;
+  organization_name: string;
+  already_member: boolean;
+}
+
+/** Server-side sort of a paginated list: `field` or `-field` (backend allowlist). */
+export type Ordering = string;
+
+const pageQuery = (page: number, ordering?: Ordering) =>
+  `?page=${page}${ordering ? `&ordering=${encodeURIComponent(ordering)}` : ''}`;
 
 export interface PermissionOverrideDto {
   id: number;
@@ -174,26 +239,6 @@ export interface NetworkWriteDto {
   description?: string;
 }
 
-// ---------------------------------------------------------------- platform
-
-export interface PlatformTenantDto {
-  id: string;
-  name: string;
-  description: string;
-  is_active: boolean;
-  owners: string[];
-  member_count: number;
-  organization_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PlatformTenantCreateDto {
-  name: string;
-  description?: string;
-  owner_email: string;
-}
-
 // ---------------------------------------------------------------- paths + calls
 
 const tenantPath = (t: string) => `/api/tenants/${encodeURIComponent(t)}/`;
@@ -207,6 +252,7 @@ const remove = (path: string) => apiRequest<null>(path, { method: 'DELETE' });
 export const tenancyApi = {
   // Tenants
   listTenants: (signal?: AbortSignal) => get<TenantDto[]>('/api/tenants/', signal),
+  listMyOrganizations: (signal?: AbortSignal) => get<MyOrganizationDto[]>('/api/organizations/', signal),
   updateTenant: (t: string, body: TenantUpdateDto) => send<TenantDto>(tenantPath(t), 'PATCH', body),
 
   listTenantMembers: (t: string, signal?: AbortSignal) =>
@@ -217,8 +263,8 @@ export const tenancyApi = {
     send<TenantMembershipDto>(`${tenantPath(t)}members/${id}/`, 'PATCH', body),
   removeTenantMember: (t: string, id: number) => remove(`${tenantPath(t)}members/${id}/`),
 
-  tenantActivity: (t: string, page: number, signal?: AbortSignal) =>
-    get<Paginated<ActivityEntryDto>>(`${tenantPath(t)}activity/?page=${page}`, signal),
+  tenantActivity: (t: string, page: number, signal?: AbortSignal, ordering?: Ordering) =>
+    get<Paginated<ActivityEntryDto>>(`${tenantPath(t)}activity/${pageQuery(page, ordering)}`, signal),
 
   // Organizations
   listOrganizations: (t: string, signal?: AbortSignal) =>
@@ -231,8 +277,21 @@ export const tenancyApi = {
 
   listOrganizationMembers: (t: string, o: string, signal?: AbortSignal) =>
     get<OrganizationMembershipDto[]>(`${orgPath(t, o)}members/`, signal),
-  addOrganizationMember: (t: string, o: string, body: { email: string; role: OrganizationRole }) =>
-    send<OrganizationMembershipDto>(`${orgPath(t, o)}members/`, 'POST', body),
+  /** Email only: the backend adds an existing account (Viewer) or sends an invitation. */
+  addOrganizationMember: (t: string, o: string, body: { email: string }) =>
+    send<AddMemberResultDto>(`${orgPath(t, o)}members/`, 'POST', body),
+  listInvitations: (t: string, o: string, signal?: AbortSignal) =>
+    get<OrganizationInvitationDto[]>(`${orgPath(t, o)}invitations/`, signal),
+  resendInvitation: (t: string, o: string, id: string) =>
+    send<OrganizationInvitationDto>(`${orgPath(t, o)}invitations/${encodeURIComponent(id)}/resend/`, 'POST', {}),
+  /** Revokes (the record is kept). */
+  revokeInvitation: (t: string, o: string, id: string) => remove(`${orgPath(t, o)}invitations/${encodeURIComponent(id)}/`),
+
+  // Emailed invitation links (the token is the only identifier)
+  getInvitationLink: (token: string, signal?: AbortSignal) =>
+    get<InvitationLinkDto>(`/api/invitations/${encodeURIComponent(token)}/`, signal),
+  acceptInvitation: (token: string) =>
+    send<InvitationAcceptedDto>(`/api/invitations/${encodeURIComponent(token)}/accept/`, 'POST', {}),
   updateOrganizationMember: (
     t: string,
     o: string,
@@ -252,8 +311,8 @@ export const tenancyApi = {
   accessList: (t: string, o: string, signal?: AbortSignal) =>
     get<EffectiveAccessDto[]>(`${orgPath(t, o)}access/`, signal),
 
-  organizationActivity: (t: string, o: string, page: number, signal?: AbortSignal) =>
-    get<Paginated<ActivityEntryDto>>(`${orgPath(t, o)}activity/?page=${page}`, signal),
+  organizationActivity: (t: string, o: string, page: number, signal?: AbortSignal, ordering?: Ordering) =>
+    get<Paginated<ActivityEntryDto>>(`${orgPath(t, o)}activity/${pageQuery(page, ordering)}`, signal),
 
   // Infrastructure
   listSites: (t: string, o: string, signal?: AbortSignal) => get<SiteDto[]>(`${orgPath(t, o)}sites/`, signal),
@@ -269,11 +328,4 @@ export const tenancyApi = {
   updateNetwork: (t: string, o: string, id: string, body: Partial<NetworkWriteDto>) =>
     send<NetworkDto>(`${orgPath(t, o)}networks/${id}/`, 'PATCH', body),
   deleteNetwork: (t: string, o: string, id: string) => remove(`${orgPath(t, o)}networks/${id}/`),
-
-  // Platform administration (is_staff)
-  listPlatformTenants: (signal?: AbortSignal) => get<PlatformTenantDto[]>('/api/platform/tenants/', signal),
-  createPlatformTenant: (body: PlatformTenantCreateDto) =>
-    send<PlatformTenantDto>('/api/platform/tenants/', 'POST', body),
-  updatePlatformTenant: (id: string, body: { name?: string; description?: string; is_active?: boolean }) =>
-    send<PlatformTenantDto>(`/api/platform/tenants/${encodeURIComponent(id)}/`, 'PATCH', body),
 };

@@ -2,7 +2,7 @@
 Demo environment for development databases (``manage.py seed_demo``).
 
 It shows the hybrid access model working, without bypassing it: nobody is
-a Tenant owner, and every bit of access comes from memberships, policies and
+a superuser, and every bit of access comes from memberships, policies and
 overrides.
 
 | User                       | Standing                                            |

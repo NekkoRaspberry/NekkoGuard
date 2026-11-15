@@ -5,7 +5,7 @@ Tenant A: Organizations A1 and A2.   Tenant B: Organization B1.
 
 | user     | Tenant A                                  | direct / other            |
 |----------|-------------------------------------------|---------------------------|
-| owner    | owner, all orgs, default owner            |                           |
+| ada      | admin, all orgs, default admin            |                           |
 | john     | admin, NO organizations       (A)         |                           |
 | mary     | member, selected [A1], operator (B)       |                           |
 | carl     | member, all orgs, operator   (C)          | DENY networks.view in A1  |
@@ -13,7 +13,7 @@ Tenant A: Organizations A1 and A2.   Tenant B: Organization B1.
 | sarah    | member, all orgs, viewer     (E)          | Tenant B: admin, all, admin |
 | david    | member, NO organizations     (F)          |                           |
 | outsider | —                                         | —                         |
-| b_owner  | —                                         | Tenant B owner, all, owner |
+| b_admin  | —                                         | Tenant B admin, all, admin |
 """
 
 from __future__ import annotations
@@ -103,19 +103,26 @@ def build_world() -> World:
         a2=OrganizationFactory(tenant=tenant_a, name="A2"),
         b1=OrganizationFactory(tenant=tenant_b, name="B1"),
     )
-    names = ["owner", "john", "mary", "carl", "peter", "sarah", "david"]
-    names += ["outsider", "b_owner"]
+    names = ["ada", "john", "mary", "carl", "peter", "sarah", "david"]
+    names += ["outsider", "b_admin"]
     world.users = {n: UserFactory(email=f"{n}@example.test") for n in names}
     u = world.users
 
     _member(
         tenant_a,
-        u["owner"],
-        TenantRole.OWNER,
+        u["ada"],
+        TenantRole.ADMIN,
         access=Access.ALL,
-        default=OrgRole.OWNER,
+        default=OrgRole.ADMIN,
     )
-    _member(tenant_a, u["john"], TenantRole.ADMIN)
+    # Tenant rights apply only inside the organization scope: john administers all.
+    _member(
+        tenant_a,
+        u["john"],
+        TenantRole.ADMIN,
+        access=Access.ALL,
+        default=OrgRole.VIEWER,
+    )
     _member(
         tenant_a,
         u["mary"],
@@ -155,10 +162,10 @@ def build_world() -> World:
     _member(tenant_a, u["david"], TenantRole.MEMBER)
     _member(
         tenant_b,
-        u["b_owner"],
-        TenantRole.OWNER,
+        u["b_admin"],
+        TenantRole.ADMIN,
         access=Access.ALL,
-        default=OrgRole.OWNER,
+        default=OrgRole.ADMIN,
     )
 
     for org in (world.a1, world.a2, world.b1):
@@ -176,3 +183,26 @@ def world(db) -> World:
 @pytest.fixture
 def platform_admin(db) -> User:
     return UserFactory(is_staff=True)
+
+
+@pytest.fixture
+def scoped_admin(world) -> User:
+    """Tenant Administrator of Tenant A limited to the selected organization A1."""
+    user = UserFactory(email="scoped@example.test")
+    _member(
+        world.tenant_a,
+        user,
+        TenantRole.ADMIN,
+        access=Access.SELECTED,
+        default=OrgRole.VIEWER,
+        selected=[world.a1],
+    )
+    return user
+
+
+@pytest.fixture
+def no_org_admin(world) -> User:
+    """Tenant Administrator of Tenant A with organization access "None"."""
+    user = UserFactory(email="noorgs@example.test")
+    _member(world.tenant_a, user, TenantRole.ADMIN)
+    return user

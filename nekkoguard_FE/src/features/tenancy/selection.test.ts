@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   changeSelection,
   EMPTY_SELECTION,
-  parseSelection,
   resolveSelection,
-  writeSelection,
   type Selection,
   type SelectionDefaults,
   type SelectionOptions,
@@ -33,36 +31,6 @@ const loaded: SelectionOptions = {
 };
 
 const sel = (partial: Partial<Selection>): Selection => ({ ...EMPTY_SELECTION, ...partial });
-
-describe('parseSelection / writeSelection (URL sync)', () => {
-  it('reads valid ids from the query string', () => {
-    const params = new URLSearchParams(`tenant=${T1}&org=${O1}&site=${S1}&network=${N1}`);
-    expect(parseSelection(params)).toEqual({ tenant: T1, org: O1, site: S1, network: N1 });
-  });
-
-  it('drops malformed ids instead of trusting them', () => {
-    const params = new URLSearchParams('tenant=1&org=../../etc&site=%3Cscript%3E');
-    expect(parseSelection(params)).toEqual(EMPTY_SELECTION);
-  });
-
-  it('normalises case so the same id is one cache key', () => {
-    const params = new URLSearchParams(`tenant=${T1.toUpperCase()}`);
-    expect(parseSelection(params).tenant).toBe(T1);
-  });
-
-  it('writes the selection and keeps unrelated parameters', () => {
-    const next = writeSelection(new URLSearchParams(`tab=members&site=${S1}`), sel({ tenant: T1, org: O1 }));
-    expect(next.get('tab')).toBe('members');
-    expect(next.get('tenant')).toBe(T1);
-    expect(next.get('org')).toBe(O1);
-    expect(next.has('site')).toBe(false);
-  });
-
-  it('round-trips', () => {
-    const selection = sel({ tenant: T1, org: O1, site: S1 });
-    expect(parseSelection(writeSelection(new URLSearchParams(), selection))).toEqual(selection);
-  });
-});
 
 describe('changeSelection (dependent resets)', () => {
   const full = sel({ tenant: T1, org: O1, site: S1, network: N1 });

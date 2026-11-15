@@ -8,6 +8,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from nekkoguard.organizations.invitations import has_open_invitation
+
 if typing.TYPE_CHECKING:
     from allauth.socialaccount.models import SocialLogin
     from django.http import HttpRequest
@@ -31,7 +33,10 @@ class AccountAdapter(DefaultAccountAdapter):
     def clean_email(self, email: str) -> str:
         """Used by email signup and when adding an email to an account."""
         email = super().clean_email(email)
-        if not is_allowed_email_domain(email):
+        # An organization invitation sent to this exact address is enough: the
+        # invitee may use their company address even when it is not a well-known
+        # provider. (Signing up still requires verifying the address.)
+        if not is_allowed_email_domain(email) and not has_open_invitation(email):
             raise ValidationError(
                 _(
                     "Please use an address from a well-known email provider, "

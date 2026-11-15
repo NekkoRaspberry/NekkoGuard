@@ -21,11 +21,16 @@ export const queryKeys = {
   authorizedApps: ['oauth', 'authorized'] as const,
   oauthApplications: ['oauth', 'applications'] as const,
   oidcEnabled: ['oauth', 'oidc'] as const,
+  /** Superuser "view as user" status, and the user search of its switcher. */
+  impersonation: ['impersonation', 'status'] as const,
+  impersonationUsers: (search: string) => ['impersonation', 'users', search] as const,
 
   tenants: ['tenants', 'list'] as const,
+  /** Organizations I can open in every Tenant (outside any Tenant scope: survives switches). */
+  myOrganizations: ['organizations', 'mine'] as const,
   tenantScope,
   tenantMembers: (t: string) => [...tenantScope(t), 'members'] as const,
-  tenantActivity: (t: string, page: number) => [...tenantScope(t), 'activity', page] as const,
+  tenantActivity: (t: string, page: number, ordering = '') => [...tenantScope(t), 'activity', page, ordering] as const,
   organizations: (t: string) => [...tenantScope(t), 'organizations', 'list'] as const,
   organizationScope,
   organization: (t: string, o: string) => [...organizationScope(t, o), 'detail'] as const,
@@ -35,8 +40,13 @@ export const queryKeys = {
   sites: (t: string, o: string) => [...organizationScope(t, o), 'sites'] as const,
   networks: (t: string, o: string, site: string | null) =>
     [...organizationScope(t, o), 'networks', site ?? 'all'] as const,
-  organizationActivity: (t: string, o: string, page: number) =>
-    [...organizationScope(t, o), 'activity', page] as const,
+  organizationActivity: (t: string, o: string, page: number, ordering = '') =>
+    [...organizationScope(t, o), 'activity', page, ordering] as const,
+  invitations: (t: string, o: string) => [...organizationScope(t, o), 'invitations'] as const,
+  /** An emailed invitation link (public; not tied to the selected context). */
+  invitationLink: (token: string) => ['invitations', 'link', token] as const,
 
-  platformTenants: ['platform', 'tenants'] as const,
+  /** Appearance of a Tenant (org null) or Organization: dropped with its scope on switch. */
+  appearance: (t: string, o: string | null) =>
+    o ? ([...organizationScope(t, o), 'appearance'] as const) : ([...tenantScope(t), 'appearance'] as const),
 };

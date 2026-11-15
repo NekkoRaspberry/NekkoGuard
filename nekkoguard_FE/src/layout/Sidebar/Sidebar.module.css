@@ -128,10 +128,10 @@
   transition: opacity var(--duration-fast) var(--ease-out);
 }
 
-/* Collapsed rail (desktop only — the mobile drawer always shows labels).
-   Labels are removed from the layout, not just hidden: an invisible label still takes
-   width and pushes the icon out of the 64px rail. */
-@media (min-width: 1024px) {
+/* Collapsed rail (≥640px; the mobile drawer always shows labels). Breakpoints:
+   see layout/breakpoints.ts. Labels are removed from the layout, not just hidden: an
+   invisible label still takes width and pushes the icon out of the 64px rail. */
+@media (min-width: 640px) {
   .collapsed .itemLabel,
   .collapsed .connLabel,
   .collapsed .connDetail {
@@ -305,8 +305,8 @@
   display: none;
 }
 
-/* Laptop: collapse to the icon rail by default is handled by the user; tablet/mobile → drawer */
-@media (max-width: 1023px) {
+/* Phones (<640px): not even the 64px rail leaves room for the content → drawer. */
+@media (max-width: 639px) {
   .sidebar,
   .collapsed {
     position: fixed;
@@ -350,5 +350,46 @@
   .backdropVisible {
     opacity: 1;
     pointer-events: auto;
+  }
+}
+
+/* ---- White-label navigation positions (never applied to the default "left"). */
+
+/* Right: the same sidebar, mirrored. */
+.placeRight {
+  box-shadow: inset 1px 0 0 var(--border-subtle);
+}
+
+.placeRight .active::before {
+  left: auto;
+  right: -12px;
+  border-radius: 2px 0 0 2px;
+}
+
+@media (min-width: 640px) {
+  .placeRight.collapsed .active::before {
+    left: auto;
+    right: -8px;
+  }
+}
+
+/* Top: TopNav replaces the sidebar on desktop; below that the sidebar is the rail
+   (tablets) or the drawer (phones), as for the other positions. */
+@media (min-width: 1024px) {
+  .placeTop {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .placeRight,
+  .placeRight.collapsed {
+    left: auto;
+    right: 0;
+    transform: translateX(100%);
+  }
+
+  .placeRight.mobileOpen {
+    transform: translateX(0);
   }
 }

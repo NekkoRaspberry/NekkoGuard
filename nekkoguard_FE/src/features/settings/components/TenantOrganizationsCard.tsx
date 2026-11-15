@@ -7,13 +7,17 @@ import { ROUTES } from '@/app/routes';
 import { Button, ButtonLink } from '@/components/Button/Button';
 import { Card, CardBody, CardHeader } from '@/components/Card/Card';
 import { DataTable, type Column } from '@/components/DataTable/DataTable';
+import { TableExportButton } from '@/components/DataTable/TableExport';
+import { useTableExport } from '@/components/DataTable/useTableExport';
 import { ErrorState } from '@/components/ErrorState/ErrorState';
 import { Skeleton } from '@/components/Skeleton/Skeleton';
 import { StatusPill } from '@/components/StatusPill/StatusPill';
 import { useToast } from '@/components/Toast/useToast';
-import { useCanTenant, useContextSearch } from '@/features/tenancy/hooks';
+import { useCanTenant } from '@/features/tenancy/hooks';
+import { manageOrganization } from '../managedOrganization';
 import { TENANT_PERMISSIONS } from '@/features/tenancy/model';
 import { NameDescriptionDialog } from '@/features/tenancy/components/NameDescriptionDialog';
+import { useTenantName } from '@/features/tenancy/hooks';
 import styles from '@/features/tenancy/components/Management.module.css';
 
 /**
@@ -21,9 +25,10 @@ import styles from '@/features/tenancy/components/Management.module.css';
  * access" shows separately whether they also reach the infrastructure.
  */
 export function TenantOrganizationsCard({ tenantId }: { tenantId: string }) {
+  const tenantName = useTenantName(tenantId);
+  const exporter = useTableExport();
   const queryClient = useQueryClient();
   const { notify } = useToast();
-  const contextSearch = useContextSearch();
   const canManageOrganizations = useCanTenant(TENANT_PERMISSIONS.manageOrganizations);
   const canManageMembers = useCanTenant(TENANT_PERMISSIONS.manageMembers);
   const [creating, setCreating] = useState(false);
@@ -37,6 +42,7 @@ export function TenantOrganizationsCard({ tenantId }: { tenantId: string }) {
     {
       key: 'name',
       header: 'Organization',
+      sortValue: (o) => o.name,
       render: (o) => (
         <span className={styles.twoLine}>
           <span className={styles.primary}>{o.name}</span>
@@ -47,14 +53,22 @@ export function TenantOrganizationsCard({ tenantId }: { tenantId: string }) {
     {
       key: 'status',
       header: 'Status',
+      sortValue: (o) => o.is_active,
+      exportValue: (o) => (o.is_active ? 'Active' : 'Deactivated'),
       render: (o) => <StatusPill tone={o.is_active ? 'success' : 'neutral'} label={o.is_active ? 'Active' : 'Deactivated'} />,
       secondary: true,
     },
     {
       key: 'access',
       header: 'Your access',
-      render: (o) =>
-        o.has_access ? <StatusPill tone="info" label="Infrastructure" /> : <span className={styles.muted}>Administration only</span>,
+      sortValue: (o) => Number(o.can_administer) * 2 + Number(o.has_access),
+      exportValue: (o) => [o.can_administer && 'Administration', o.has_access && 'Infrastructure'].filter(Boolean).join(', '),
+      render: (o) => (
+        <span className={styles.chips}>
+          {o.can_administer && <StatusPill tone="primary" label="Administration" />}
+          {o.has_access && <StatusPill tone="info" label="Infrastructure" />}
+        </span>
+      ),
     },
   ];
   if (canManageOrganizations || canManageMembers) {
@@ -62,11 +76,13 @@ export function TenantOrganizationsCard({ tenantId }: { tenantId: string }) {
       key: 'actions',
       header: <span className="visually-hidden">Actions</span>,
       align: 'end',
-      render: (o) => (
-        <ButtonLink size="sm" variant="secondary" to={`${ROUTES.tenantOrganizations}/${o.id}${contextSearch}`}>
-          Manage
-        </ButtonLink>
-      ),
+      // Only organizations in the caller's organization scope can be managed.
+      render: (o) =>
+        o.can_administer ? (
+          <ButtonLink size="sm" variant="secondary" to={ROUTES.tenantOrganization} state={manageOrganization(o.id)}>
+            Manage
+          </ButtonLink>
+        ) : null,
     });
   }
 
@@ -76,13 +92,16 @@ export function TenantOrganizationsCard({ tenantId }: { tenantId: string }) {
         icon={<Building2 size={16} />}
         title="Organizations"
         titleId="tenant-orgs-title"
-        description="Infrastructure environments of this tenant. Creating one gives nobody access automatically."
+        description={`Infrastructure environments of ${tenantName}. Creating one gives nobody access automatically.`}
         actions={
-          canManageOrganizations && (
-            <Button size="sm" variant="primary" leftIcon={<Plus size={14} />} onClick={() => setCreating(true)}>
-              New organization
-            </Button>
-          )
+          <>
+            <TableExportButton exporter={exporter} />
+            {canManageOrganizations && (
+              <Button size="sm" variant="primary" leftIcon={<Plus size={14} />} onClick={() => setCreating(true)}>
+                New organization
+              </Button>
+            )}
+          </>
         }
       />
       <CardBody>
@@ -93,6 +112,8 @@ export function TenantOrganizationsCard({ tenantId }: { tenantId: string }) {
         ) : (
           <DataTable
             label="Organizations"
+            exportOwner={tenantName}
+            exporter={exporter}
             columns={columns}
             rows={organizations.data}
             rowKey={(o) => o.id}
@@ -106,7 +127,7 @@ export function TenantOrganizationsCard({ tenantId }: { tenantId: string }) {
           onOpenChange={setCreating}
           icon={<Building2 size={18} />}
           title="New organization"
-          description="Then give people access: direct members, or a tenant access policy."
+          description={`Then give people access: direct members, or an organization access policy of ${tenantName}.`}
           submitLabel="Create"
           onSubmit={(values) => tenancyApi.createOrganization(tenantId, values)}
           onSaved={() => {

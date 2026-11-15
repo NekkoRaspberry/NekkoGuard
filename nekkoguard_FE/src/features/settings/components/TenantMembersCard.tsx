@@ -8,13 +8,16 @@ import { Banner } from '@/components/Banner/Banner';
 import { Button } from '@/components/Button/Button';
 import { Card, CardBody, CardHeader } from '@/components/Card/Card';
 import { DataTable, type Column } from '@/components/DataTable/DataTable';
+import { TableExportButton } from '@/components/DataTable/TableExport';
+import { useTableExport } from '@/components/DataTable/useTableExport';
 import { ErrorState } from '@/components/ErrorState/ErrorState';
 import { ConfirmDialog } from '@/components/Modal/ConfirmDialog';
 import { Skeleton } from '@/components/Skeleton/Skeleton';
 import { StatusPill } from '@/components/StatusPill/StatusPill';
 import { useToast } from '@/components/Toast/useToast';
 import { useCurrentUser } from '@/features/account/hooks/useCurrentUser';
-import { ORGANIZATION_ROLE_LABELS, TENANT_ROLE_LABELS } from '@/features/tenancy/model';
+import { useTenantName } from '@/features/tenancy/hooks';
+import { ORGANIZATION_ROLE_LABELS, TENANT_ROLE_LABELS, TENANT_ROLES } from '@/features/tenancy/model';
 import styles from '@/features/tenancy/components/Management.module.css';
 import { TenantMemberDialog } from './TenantMemberDialog';
 
@@ -26,7 +29,9 @@ function accessSummary(m: TenantMembershipDto): string {
   return `${count} selected · ${role}`;
 }
 
-export function TenantMembersCard({ tenantId, myRole }: { tenantId: string; myRole: string | null }) {
+export function TenantMembersCard({ tenantId }: { tenantId: string }) {
+  const tenantName = useTenantName(tenantId);
+  const exporter = useTableExport();
   const queryClient = useQueryClient();
   const { notify } = useToast();
   const me = useCurrentUser().data;
@@ -57,11 +62,12 @@ export function TenantMembersCard({ tenantId, myRole }: { tenantId: string; myRo
     },
   });
 
-  const isOwner = myRole === 'owner';
   const columns: Column<TenantMembershipDto>[] = [
     {
       key: 'user',
       header: 'Member',
+      sortValue: (m) => m.user.name || m.user.email,
+      exportValue: (m) => (m.user.name ? `${m.user.name} (${m.user.email})` : m.user.email),
       render: (m) => (
         <span className={styles.twoLine}>
           <span className={styles.primary}>{m.user.name || m.user.email}</span>
@@ -69,11 +75,14 @@ export function TenantMembersCard({ tenantId, myRole }: { tenantId: string; myRo
         </span>
       ),
     },
-    { key: 'role', header: 'Tenant role', render: (m) => TENANT_ROLE_LABELS[m.role] },
-    { key: 'access', header: 'Organization access', render: (m) => accessSummary(m), secondary: true },
+    // Roles sort by rank (administrator first), not alphabetically.
+    { key: 'role', header: 'Tenant role', render: (m) => TENANT_ROLE_LABELS[m.role], sortValue: (m) => TENANT_ROLES.indexOf(m.role), exportValue: (m) => TENANT_ROLE_LABELS[m.role] },
+    { key: 'access', header: 'Organization access', render: (m) => accessSummary(m), sortValue: (m) => accessSummary(m), secondary: true },
     {
       key: 'status',
       header: 'Status',
+      sortValue: (m) => m.status,
+      exportValue: (m) => (m.status === 'active' ? 'Active' : 'Suspended'),
       render: (m) => <StatusPill tone={m.status === 'active' ? 'success' : 'warning'} label={m.status === 'active' ? 'Active' : 'Suspended'} />,
       secondary: true,
     },
@@ -81,24 +90,20 @@ export function TenantMembersCard({ tenantId, myRole }: { tenantId: string; myRo
       key: 'actions',
       header: <span className="visually-hidden">Actions</span>,
       align: 'end',
-      render: (m) => {
-        const isSelf = m.user.id === me?.id;
-        return (
+      // The backend decides (role rank and organization scope); nobody edits or removes themselves.
+      render: (m) =>
+        m.can_manage ? (
           <span className={styles.rowActions}>
-            {/* Owners may adjust their own organization access; nobody else edits themselves. */}
-            {(!isSelf || isOwner) && (
-              <Button size="sm" variant="ghost" iconOnly aria-label={`Edit ${m.user.email}`} onClick={() => setEditing({ member: m })}>
-                <Pencil size={14} />
-              </Button>
-            )}
-            {!isSelf && (
+            <Button size="sm" variant="ghost" iconOnly aria-label={`Edit ${m.user.email}`} onClick={() => setEditing({ member: m })}>
+              <Pencil size={14} />
+            </Button>
+            {m.user.id !== me?.id && (
               <Button size="sm" variant="ghost" iconOnly aria-label={`Remove ${m.user.email}`} onClick={() => setToRemove(m)}>
                 <Trash2 size={14} />
               </Button>
             )}
           </span>
-        );
-      },
+        ) : null,
     },
   ];
 
@@ -110,9 +115,12 @@ export function TenantMembersCard({ tenantId, myRole }: { tenantId: string; myRo
         titleId="tenant-members-title"
         description="The tenant role decides administration; the organization access policy decides which infrastructure they reach."
         actions={
-          <Button size="sm" variant="primary" leftIcon={<Plus size={14} />} onClick={() => setEditing({})}>
-            Add member
-          </Button>
+          <>
+            <TableExportButton exporter={exporter} />
+            <Button size="sm" variant="primary" leftIcon={<Plus size={14} />} onClick={() => setEditing({})}>
+              Add member
+            </Button>
+          </>
         }
       />
       <CardBody>
@@ -122,15 +130,23 @@ export function TenantMembersCard({ tenantId, myRole }: { tenantId: string; myRo
         ) : members.isError ? (
           <ErrorState error={members.error} onRetry={() => void members.refetch()} retrying={members.isFetching} />
         ) : (
-          <DataTable label="Tenant members" columns={columns} rows={members.data} rowKey={(m) => m.id} empty="No members." />
+          <DataTable
+            label="Tenant members"
+            columns={columns}
+            rows={members.data}
+            rowKey={(m) => m.id}
+            empty="No members."
+            exportOwner={tenantName}
+            exporter={exporter}
+          />
         )}
       </CardBody>
       {editing && (
         <TenantMemberDialog
           tenantId={tenantId}
           member={editing.member}
-          organizations={organizations.data ?? []}
-          isSelf={editing.member?.user.id === me?.id}
+          // Access can only be given to active organizations the caller administers.
+          organizations={(organizations.data ?? []).filter((o) => o.can_administer && o.is_active)}
           onClose={() => setEditing(null)}
           onSaved={(message) => {
             refresh();
@@ -142,7 +158,7 @@ export function TenantMembersCard({ tenantId, myRole }: { tenantId: string; myRo
         open={toRemove !== null}
         onOpenChange={(open) => !open && setToRemove(null)}
         title={`Remove ${toRemove?.user.email ?? ''}?`}
-        description="They lose their tenant role and the organization access it gave. Direct organization memberships stay until removed."
+        description={`They lose their role in ${tenantName} and the organization access it gave. Direct organization memberships stay until removed.`}
         confirmLabel="Remove member"
         loading={remove.isPending}
         onConfirm={() => toRemove && remove.mutate(toRemove)}

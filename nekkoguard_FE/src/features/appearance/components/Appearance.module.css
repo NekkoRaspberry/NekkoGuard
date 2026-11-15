@@ -1,0 +1,415 @@
+/* Appearance settings page. Existing tokens only. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.previewColumn {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-6));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Settings content column (query container), not the viewport: it sits beside the
+   settings navigation. */
+@container (max-width: 979px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .previewColumn {
+    position: static;
+  }
+
+  /* Stacked: no Branding card beside it to match. */
+  .previewFrame {
+    min-height: 0;
+  }
+}
+
+/* Side by side: as tall as the Branding card (--branding-height, set by the editor);
+   the miniature app grows to fill it. */
+.previewFrame {
+  min-height: var(--branding-height, 0);
+}
+
+.previewFrame .preview {
+  flex: 1;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.colorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4) var(--space-5);
+}
+
+.colorRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.colorRow > :last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.swatch {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  margin-top: 22px;
+  padding: 2px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.swatch:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.origin {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+  color: var(--text-muted);
+}
+
+.originHere {
+  color: var(--primary-hover);
+}
+
+.resetLink {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  cursor: pointer;
+}
+
+.resetLink:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.asset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.assetPreview {
+  display: grid;
+  place-items: center;
+  width: 160px;
+  height: 64px;
+  padding: var(--space-2);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.assetPreviewSquare {
+  width: 64px;
+}
+
+.assetPreview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.assetBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+}
+
+.assetActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.error {
+  font-size: var(--fs-label);
+  color: var(--danger);
+}
+
+.positions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.position {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.position:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary-subtle);
+  color: var(--text-primary);
+}
+
+.position:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+.position input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.footerActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.warnings {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+/* ---- live preview: a miniature app using the draft's CSS variables */
+.preview {
+  display: flex;
+  min-height: 300px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-size: var(--fs-small);
+  pointer-events: none;
+  user-select: none;
+}
+
+.previewTop {
+  flex-direction: column;
+}
+
+.previewRight {
+  flex-direction: row-reverse;
+}
+
+.previewNav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 120px;
+  padding: var(--space-3) var(--space-2);
+  background: var(--bg-sidebar);
+  box-shadow: var(--shadow-nav);
+  flex-shrink: 0;
+}
+
+.previewTop .previewNav {
+  flex-direction: row;
+  align-items: center;
+  width: auto;
+  padding: var(--space-2) var(--space-3);
+  box-shadow: inset 0 -1px 0 var(--border-subtle);
+}
+
+.previewBrand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.previewTop .previewBrand {
+  margin: 0 var(--space-2) 0 0;
+}
+
+.previewBrand img {
+  height: 20px;
+  max-width: 60px;
+  object-fit: contain;
+}
+
+.previewItem {
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.previewItemActive {
+  background: var(--primary-subtle);
+  color: var(--text-primary);
+}
+
+/* Top bar + page, next to (or below, for "top") the navigation. */
+.previewMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The app's second bar: page title, organization switcher, profile. */
+.previewTopbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  height: 30px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-app);
+  font-size: 11px;
+}
+
+.previewCrumb {
+  color: var(--text-secondary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.previewSwitcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 120px;
+  padding: 2px 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.previewSwitcher span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.previewSwitcher svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.previewProfile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.previewAvatar {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--primary-subtle);
+  color: var(--primary-hover);
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.previewUser {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+}
+
+.previewContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  min-width: 0;
+}
+
+.previewCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  background-image: var(--glow-card);
+}
+
+.previewHeading {
+  font-weight: 600;
+  font-size: var(--fs-h3);
+}
+
+.previewMuted {
+  color: var(--text-muted);
+}
+
+.previewAccent {
+  color: var(--accent);
+}
+
+.previewRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}

@@ -1,8 +1,8 @@
 /**
  * The context selection (Tenant → Organization → Site → Network) as pure functions.
  *
- * The URL (`?tenant=&org=&site=&network=`) is the source of truth so the context
- * survives refresh and browser navigation. The URL is never proof of authorization:
+ * The selection is kept in memory (TenancyProvider) and remembered per user
+ * (storage.ts) — never in the URL. A requested id is never proof of authorization:
  * `resolveSelection` keeps only ids the backend listed for the current user, and the
  * backend re-checks every request anyway.
  */
@@ -26,26 +26,6 @@ export function isUuid(value: string | null | undefined): value is string {
   return typeof value === 'string' && UUID_RE.test(value);
 }
 
-/** Reads the selection from the query string; malformed ids are dropped. */
-export function parseSelection(params: URLSearchParams): Selection {
-  const read = (key: Level) => {
-    const value = params.get(key);
-    return isUuid(value) ? value.toLowerCase() : null;
-  };
-  return { tenant: read('tenant'), org: read('org'), site: read('site'), network: read('network') };
-}
-
-/** Returns new params with the selection written in; other parameters are kept. */
-export function writeSelection(params: URLSearchParams, selection: Selection): URLSearchParams {
-  const next = new URLSearchParams(params);
-  for (const level of LEVELS) {
-    const value = selection[level];
-    if (value) next.set(level, value);
-    else next.delete(level);
-  }
-  return next;
-}
-
 /** Changes one level and resets every level below it (its old values belong to another parent). */
 export function changeSelection(current: Selection, level: Level, value: string | null): Selection {
   const index = LEVELS.indexOf(level);
@@ -67,9 +47,11 @@ export interface SelectionOptions {
   sites: readonly string[] | undefined;
   /** Network id → site id, for the selected Organization. */
   networks: ReadonlyMap<string, string> | undefined;
+  /** Tenant the backend marks as the default (used when nothing is requested or remembered). */
+  defaultTenant?: string | null;
 }
 
-/** Remembered last choices (localStorage); only used when the URL has none. */
+/** Remembered last choices (localStorage); used when nothing was chosen in this tab yet. */
 export interface SelectionDefaults {
   tenant: string | null;
   /** Last Organization per Tenant. */
@@ -84,17 +66,20 @@ export interface Resolution {
   removed: Level[];
 }
 
-function pick(requested: string | null, fallback: string | null | undefined, allowed: readonly string[]) {
-  if (requested && allowed.includes(requested)) return requested;
-  if (fallback && allowed.includes(fallback)) return fallback;
-  return allowed[0] ?? null;
+/** First candidate the user may select, else the first allowed option. */
+function pick(allowed: readonly string[], ...candidates: (string | null | undefined)[]) {
+  return candidates.find((candidate) => candidate && allowed.includes(candidate)) ?? allowed[0] ?? null;
 }
 
 /**
  * Validates a requested selection against what the user may select.
  *
- * - Tenant and Organization are always chosen when any is available (URL → remembered
- *   default → first). Site and Network are optional filters ("All" = null).
+ * - Tenant and Organization are always chosen when any is available:
+ *   1. the URL, else the user's last choice (remembered per user);
+ *   2. otherwise the backend's default Tenant (first one with an Organization the user
+ *      can open; the demo Tenant for superusers without memberships) and its first
+ *      Organization.
+ *   Site and Network are optional filters ("All" = null).
  * - An id the user cannot select is removed and reported in `removed`.
  * - While a level's options are loading, it and its children are kept as requested and
  *   `pending` is true — nothing is shown until it is validated.
@@ -108,7 +93,7 @@ export function resolveSelection(
   const result: Selection = { ...EMPTY_SELECTION };
 
   if (options.tenants === undefined) return { selection: requested, pending: true, removed };
-  result.tenant = pick(requested.tenant, defaults.tenant, options.tenants);
+  result.tenant = pick(options.tenants, requested.tenant, defaults.tenant, options.defaultTenant);
   if (requested.tenant && result.tenant !== requested.tenant) removed.push('tenant');
   if (!result.tenant) return { selection: result, pending: false, removed };
 
@@ -117,7 +102,7 @@ export function resolveSelection(
   if (options.organizations === undefined) {
     return { selection: { ...result, org: wantedOrg, site: null, network: null }, pending: true, removed };
   }
-  result.org = pick(wantedOrg, defaults.orgByTenant[result.tenant], options.organizations);
+  result.org = pick(options.organizations, wantedOrg, defaults.orgByTenant[result.tenant]);
   if (wantedOrg && result.org !== wantedOrg) removed.push('org');
   if (!result.org) return { selection: result, pending: false, removed };
 

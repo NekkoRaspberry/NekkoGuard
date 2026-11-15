@@ -1,6 +1,6 @@
 import { ArrowRight, Lock, Mail } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { allauth } from '@/api/allauth';
 import { ROUTES, routeForPendingFlow } from '@/app/routes';
 import { Banner } from '@/components/Banner/Banner';
@@ -8,6 +8,7 @@ import { Button, ButtonLink } from '@/components/Button/Button';
 import { Spinner } from '@/components/Spinner/Spinner';
 import { PasswordField } from '@/components/TextField/PasswordField';
 import { TextField } from '@/components/TextField/TextField';
+import type { InvitationSignupState } from '@/features/invitations/InvitationPage';
 import { EntranceLayout } from '@/layout/EntranceLayout/EntranceLayout';
 import { AuthHeading } from '../components/AuthHeading';
 import { ProviderButtons } from '../components/ProviderButtons';
@@ -23,8 +24,10 @@ export function SignupPage() {
   const { applySession } = useAuth();
   const navigate = useNavigate();
   const config = useAuthConfig();
+  // Coming from an invitation link: the invited address, which joins on verification.
+  const invitation = (useLocation().state as InvitationSignupState | null)?.invitation;
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(invitation?.email ?? '');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -88,6 +91,13 @@ export function SignupPage() {
   return (
     <EntranceLayout footer={footer}>
       <AuthHeading title="Create your account" subtitle="You will need to confirm your email address before signing in." />
+
+      {invitation && (
+        <Banner tone="info" className={styles.banner}>
+          You are joining <strong>{invitation.organizationName}</strong>. Use {invitation.email}: once you confirm it, you
+          become a member automatically.
+        </Banner>
+      )}
 
       {errors.form && (
         <Banner tone="danger" className={styles.banner}>

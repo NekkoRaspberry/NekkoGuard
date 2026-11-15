@@ -32,7 +32,6 @@ from nekkoguard.organizations.models import Organization
 from nekkoguard.organizations.models import Tenant
 from nekkoguard.organizations.roles import Permission
 from nekkoguard.organizations.roles import TenantPermission
-from nekkoguard.organizations.roles import is_platform_admin
 from nekkoguard.organizations.services import OrganizationActor
 
 if TYPE_CHECKING:
@@ -130,6 +129,15 @@ class OrganizationScopedMixin(TenantScopedMixin):
         return access.get_organization_access(self.request.user, self.organization)
 
     @cached_property
+    def tenant_access(self) -> access.TenantAccess | None:
+        """Tenant rights count here only if this Organization is in the member's
+        organization scope (All / Selected / None) — see ``access.py``."""
+        tenant_access = access.get_tenant_access(self.request.user, self.tenant)
+        if tenant_access is None or not tenant_access.administers(self.organization):
+            return None
+        return tenant_access
+
+    @cached_property
     def actor(self) -> OrganizationActor:
         return OrganizationActor(
             user=self.request.user,  # type: ignore[arg-type]
@@ -173,12 +181,4 @@ class HasScopedPermission(BasePermission):
         return requirement is not None and view.satisfies(requirement)
 
 
-class IsPlatformAdmin(BasePermission):
-    message = "Only platform administrators can do this."
-
-    def has_permission(self, request: Request, view: APIView) -> bool:
-        return is_platform_admin(request.user)
-
-
 SCOPED_PERMISSIONS = [IsAuthenticated, HasScopedPermission]
-PLATFORM_PERMISSIONS = [IsAuthenticated, IsPlatformAdmin]

@@ -1,18 +1,19 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { isApiError } from '@/api/errors';
 import { queryKeys } from '@/api/queryKeys';
 import { tenancyApi } from '@/api/tenancy';
 import { useToast } from '@/components/Toast/useToast';
+import { useAuth } from '@/features/auth/useAuth';
 import { PERMISSIONS } from './model';
 import { readDefaults, rememberSelection } from './storage';
 import {
   changeSelection,
-  parseSelection,
+  EMPTY_SELECTION,
+  LEVELS,
   resolveSelection,
   sameSelection,
-  writeSelection,
   type Level,
   type Selection,
 } from './selection';
@@ -29,9 +30,11 @@ const LEVEL_NAMES: Record<Level, string> = {
 /**
  * Owns the Tenant → Organization → Site → Network context.
  *
- * - The URL is the source of truth (refresh, back/forward and shared links work).
+ * - The selection lives in memory only — never in the address bar: ids are not shown,
+ *   shared, bookmarked or kept in the browser history. It is remembered per user in
+ *   this browser (storage.ts), so a refresh reopens the same context.
  * - Every id is validated against lists the backend returned for this user; ids the
- *   user cannot select are removed from the URL.
+ *   user cannot select are dropped (and the user is told).
  * - Switching Tenant/Organization drops the previous scope's cached data. Query keys
  *   always contain the Tenant/Organization ids, so a late response for the previous
  *   context can never be shown in the new one.
@@ -39,8 +42,22 @@ const LEVEL_NAMES: Record<Level, string> = {
 export function TenancyProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { notify } = useToast();
+  // Empty = nothing chosen in this tab yet: the remembered / default context applies.
+  const [requested, setRequested] = useState<Selection>(EMPTY_SELECTION);
+
+  // Old links carried ?tenant=&org=…: drop them from the address bar (never used).
   const [searchParams, setSearchParams] = useSearchParams();
-  const requested = useMemo(() => parseSelection(searchParams), [searchParams]);
+  useEffect(() => {
+    if (!LEVELS.some((level) => searchParams.has(level))) return;
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        for (const level of LEVELS) next.delete(level);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [searchParams, setSearchParams]);
 
   // ---- options, each level only once its parent is valid
   const tenantsQuery = useQuery({
@@ -49,13 +66,23 @@ export function TenancyProvider({ children }: { children: ReactNode }) {
     staleTime: 30_000,
   });
   const tenants = tenantsQuery.data;
+  // Organization switcher: every Organization the user can open, in every Tenant.
+  const myOrganizationsQuery = useQuery({
+    queryKey: queryKeys.myOrganizations,
+    queryFn: ({ signal }) => tenancyApi.listMyOrganizations(signal),
+    staleTime: 30_000,
+  });
+  const myOrganizations = myOrganizationsQuery.data;
   const tenantIds = useMemo(() => tenants?.map((t) => t.id), [tenants]);
+  const defaultTenant = tenants?.find((t) => t.is_default)?.id ?? null;
+  // Rule 1 is remembered per user (the session user is known before any tenancy data).
+  const userId = useAuth().user?.id ?? null;
 
   const tenantId = useMemo(() => {
     if (!tenantIds) return null;
-    return resolveSelection(requested, { tenants: tenantIds, organizations: [], sites: [], networks: new Map() }, readDefaults())
+    return resolveSelection(requested, { tenants: tenantIds, organizations: [], sites: [], networks: new Map(), defaultTenant }, readDefaults(userId))
       .selection.tenant;
-  }, [requested, tenantIds]);
+  }, [requested, tenantIds, defaultTenant, userId]);
 
   const organizationsQuery = useQuery({
     queryKey: queryKeys.organizations(tenantId ?? ''),
@@ -71,9 +98,9 @@ export function TenancyProvider({ children }: { children: ReactNode }) {
 
   const orgId = useMemo(() => {
     if (!tenantIds || !orgIds) return null;
-    return resolveSelection(requested, { tenants: tenantIds, organizations: orgIds, sites: [], networks: new Map() }, readDefaults())
+    return resolveSelection(requested, { tenants: tenantIds, organizations: orgIds, sites: [], networks: new Map(), defaultTenant }, readDefaults(userId))
       .selection.org;
-  }, [requested, tenantIds, orgIds]);
+  }, [requested, tenantIds, orgIds, defaultTenant, userId]);
 
   const organizationQuery = useQuery({
     queryKey: queryKeys.organization(tenantId ?? '', orgId ?? ''),
@@ -109,11 +136,13 @@ export function TenancyProvider({ children }: { children: ReactNode }) {
       : canViewNetworks
         ? networksQuery.data && new Map(networksQuery.data.map((n) => [n.id, n.site]))
         : new Map<string, string>();
-    return resolveSelection(requested, { tenants: tenantIds, organizations: orgIds, sites, networks }, readDefaults());
+    return resolveSelection(requested, { tenants: tenantIds, organizations: orgIds, sites, networks, defaultTenant }, readDefaults(userId));
   }, [
     requested,
     tenantIds,
     orgIds,
+    defaultTenant,
+    userId,
     currentOrganization,
     organizationQuery.isError,
     canViewSites,
@@ -123,21 +152,24 @@ export function TenancyProvider({ children }: { children: ReactNode }) {
   ]);
   const selection = resolution.selection;
 
-  // Write the validated selection back to the URL (replace: not a new history entry).
+  // Keep the validated selection (adjusting state while rendering, as React recommends
+  // for derived state). Levels the user can no longer select are reported once.
+  const [dropped, setDropped] = useState<readonly Level[] | null>(null);
+  if (!resolution.pending && !sameSelection(selection, requested)) {
+    setRequested(selection);
+    if (resolution.removed.length > 0) setDropped(resolution.removed);
+  }
   useEffect(() => {
-    if (resolution.pending || sameSelection(selection, requested)) return;
-    setSearchParams((params) => writeSelection(params, selection), { replace: true });
-    if (resolution.removed.length > 0) {
-      const what = resolution.removed.map((level) => LEVEL_NAMES[level]).join(', ');
-      notify({ tone: 'warning', title: 'Context changed', description: `The requested ${what} is not available to you.` });
-    }
-  }, [resolution, selection, requested, setSearchParams, notify]);
+    if (!dropped) return;
+    const what = dropped.map((level) => LEVEL_NAMES[level]).join(', ');
+    notify({ tone: 'warning', title: 'Context changed', description: `The ${what} you had open is no longer available to you.` });
+  }, [dropped, notify]);
 
   // Remember the last valid choice; drop the cache of a scope we left.
   const previous = useRef<Selection | null>(null);
   useEffect(() => {
     if (resolution.pending) return;
-    rememberSelection(selection);
+    rememberSelection(selection, userId);
     const before = previous.current;
     previous.current = selection;
     if (!before) return;
@@ -146,13 +178,14 @@ export function TenancyProvider({ children }: { children: ReactNode }) {
     } else if (before.tenant && before.org && before.org !== selection.org) {
       queryClient.removeQueries({ queryKey: queryKeys.organizationScope(before.tenant, before.org) });
     }
-  }, [resolution.pending, selection, queryClient]);
+  }, [resolution.pending, selection, queryClient, userId]);
 
   // Access lost mid-session (404/403): reload the lists so the selection is re-validated.
   useEffect(() => {
     const error = organizationQuery.error;
     if (isApiError(error) && (error.status === 404 || error.status === 403)) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.tenants });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myOrganizations });
       if (tenantId) void queryClient.invalidateQueries({ queryKey: queryKeys.organizations(tenantId) });
     }
   }, [organizationQuery.error, queryClient, tenantId]);
@@ -168,13 +201,23 @@ export function TenancyProvider({ children }: { children: ReactNode }) {
       const target = id === null ? null : lists[level]?.find((item) => item.id === id);
       if (id !== null && !target) return; // not offered to this user: ignore
       if (selection[level] === id) return;
-      const next = changeSelection(selection, level, id);
-      setSearchParams((params) => writeSelection(params, next)); // push: back button returns
+      setRequested(changeSelection(selection, level, id));
       if (target && (level === 'tenant' || level === 'org')) {
         notify({ tone: 'info', title: `Switched to ${target.name}` });
       }
     },
-    [tenants, organizations, sitesQuery.data, networksQuery.data, selection, setSearchParams, notify],
+    [tenants, organizations, sitesQuery.data, networksQuery.data, selection, notify],
+  );
+
+  const selectOrganization = useCallback(
+    (orgId: string) => {
+      const target = myOrganizations?.find((o) => o.id === orgId);
+      if (!target) return; // not offered to this user: ignore
+      if (selection.tenant === target.tenant && selection.org === orgId) return;
+      setRequested({ tenant: target.tenant, org: orgId, site: null, network: null });
+      notify({ tone: 'info', title: `Switched to ${target.name}` });
+    },
+    [myOrganizations, selection.tenant, selection.org, notify],
   );
 
   const currentTenant = tenants?.find((t) => t.id === selection.tenant) ?? null;
@@ -201,6 +244,9 @@ export function TenancyProvider({ children }: { children: ReactNode }) {
       permissions: currentOrganization?.id === selection.org ? permissions : EMPTY,
       tenantPermissions,
       select,
+      myOrganizations,
+      myOrganizationsError: myOrganizationsQuery.error,
+      selectOrganization,
     }),
     [
       selection,
@@ -220,6 +266,9 @@ export function TenancyProvider({ children }: { children: ReactNode }) {
       permissions,
       tenantPermissions,
       select,
+      myOrganizations,
+      myOrganizationsQuery.error,
+      selectOrganization,
     ],
   );
 
