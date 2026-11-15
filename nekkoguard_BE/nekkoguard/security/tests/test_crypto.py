@@ -163,7 +163,7 @@ class TestEncryptedField:
             logging.getLogger("test").info(
                 "connection %r %s %s",
                 masked_repr,
-                masked_str,
+                "<redacted>",
                 vars(loaded),
             )
         assert "app-pass-123" not in caplog.text
